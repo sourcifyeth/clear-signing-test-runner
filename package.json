@@ -1,0 +1,40 @@
+{
+  "name": "@ethereum-sourcify/clear-signing-test-runner",
+  "version": "0.1.0",
+  "description": "CLI runner that exercises @ethereum-sourcify/clear-signing against ERC-7730 .tests.json fixtures and emits a results.json report.",
+  "type": "module",
+  "bin": {
+    "clear-signing-test-runner": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && chmod +x dist/cli.js",
+    "clean": "rm -rf dist",
+    "start": "node dist/cli.js",
+    "postinstall": "node scripts/patch-clear-signing.mjs",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "ethereum",
+    "clear-signing",
+    "erc-7730",
+    "test-runner"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@ethereum-sourcify/clear-signing": "^0.1.1",
+    "commander": "^12.1.0",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "5.9"
+  }
+}
