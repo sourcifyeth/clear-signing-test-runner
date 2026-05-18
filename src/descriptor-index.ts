@@ -12,7 +12,6 @@ interface Deployment {
 interface DescriptorShape {
   context?: {
     contract?: { deployments?: Deployment[] };
-    eip712?: { deployments?: Deployment[] };
   };
 }
 
@@ -26,10 +25,10 @@ interface EmbeddedDescriptorBundle {
 /**
  * Stage the descriptor JSON at `descriptorPath` into a temp directory as a
  * `.mjs` module (so the library's `await import()` works without JSON import
- * attributes), and build a RegistryIndex from its declared deployments.
- *
- * Both `context.contract.deployments` (calldata) and
- * `context.eip712.deployments` (typed data) are indexed.
+ * attributes), and build a RegistryIndex from the descriptor's
+ * `context.contract.deployments`. EIP-712 typed-data descriptors are not
+ * indexed — they need encodeType hashes the library now demands, and no
+ * current fixture exercises that path.
  */
 export async function buildIndexFromDescriptorFile(
   descriptorPath: string,
@@ -47,11 +46,6 @@ export async function buildIndexFromDescriptorFile(
   for (const d of descriptor.context?.contract?.deployments ?? []) {
     if (d.chainId == null || !d.address) continue;
     index.calldataIndex[`eip155:${d.chainId}:${d.address.toLowerCase()}`] =
-      file;
-  }
-  for (const d of descriptor.context?.eip712?.deployments ?? []) {
-    if (d.chainId == null || !d.address) continue;
-    index.typedDataIndex[`eip155:${d.chainId}:${d.address.toLowerCase()}`] =
       file;
   }
 

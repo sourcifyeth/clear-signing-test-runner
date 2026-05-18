@@ -20,8 +20,6 @@ npm install
 npm run build
 ```
 
-This package has a `postinstall` step that patches the published `@ethereum-sourcify/clear-signing@0.1.1` dist to add `.js` extensions on its internal relative imports. Without that patch, Node ESM can't load the library and TypeScript NodeNext can't follow its type re-exports. The patch is idempotent; remove it once an upstream release ships the fix.
-
 ## Usage
 
 ```bash

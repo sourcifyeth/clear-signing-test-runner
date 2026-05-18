@@ -1,8 +1,8 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { format } from "@ethereum-sourcify/clear-signing";
+import implementationPkg from "@ethereum-sourcify/clear-signing/package.json" with { type: "json" };
 
 import { compareRendered } from "./compare.js";
 import { buildExternalDataProvider } from "./data-provider.js";
@@ -55,7 +55,7 @@ export async function runTests(opts: RunOptions): Promise<ResultsFile> {
 
   const results: ResultsFile = {
     runner: RUNNER_ID,
-    implementation: `@ethereum-sourcify/clear-signing@${await readImplementationVersion()}`,
+    implementation: `@ethereum-sourcify/clear-signing@${implementationPkg.version}`,
     cases,
   };
 
@@ -107,22 +107,6 @@ async function runOneCase(
       status: "error",
       message: err instanceof Error ? err.message : String(err),
     };
-  }
-}
-
-async function readImplementationVersion(): Promise<string> {
-  // The library's `exports` field doesn't expose `package.json`, so we resolve
-  // its ESM entrypoint and walk up to the package root.
-  try {
-    const entryUrl = import.meta.resolve("@ethereum-sourcify/clear-signing");
-    const entry = fileURLToPath(entryUrl);
-    const pkgPath = resolve(dirname(entry), "..", "package.json");
-    const pkg = JSON.parse(await readFile(pkgPath, "utf8")) as {
-      version?: string;
-    };
-    return pkg.version ?? "unknown";
-  } catch {
-    return "unknown";
   }
 }
 

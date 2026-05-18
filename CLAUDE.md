@@ -9,12 +9,12 @@ A CLI that drives [`@ethereum-sourcify/clear-signing`](https://github.com/sourci
 ## Build & run
 
 ```bash
-npm install          # triggers postinstall patch (see "Library workaround")
+npm install
 npm run build        # tsc + chmod +x dist/cli.js
 node dist/cli.js <tests-file> -o <results-file> [--verbose]
 ```
 
-Node >= 22. ESM only. TypeScript with `moduleResolution: "Bundler"` (not NodeNext — see "Library workaround").
+Node >= 22. ESM only. TypeScript with `moduleResolution: "NodeNext"`. Requires `@ethereum-sourcify/clear-signing >= 0.1.3` — earlier versions ship extensionless relative imports that break Node ESM at runtime. If you must work with 0.1.1, see the git history for the postinstall patch + `Bundler` resolution workaround.
 
 ## Module layout
 
@@ -30,8 +30,6 @@ src/
   compare.ts          deep-equal + first-divergence message for fail status
   types.ts            input/output shapes (RenderedDisplay, ResultsFile, etc.)
   index.ts            library surface — exports runTests + types
-scripts/
-  patch-clear-signing.mjs   postinstall workaround for the library (see below)
 ```
 
 ## Output contract — the four statuses
@@ -45,7 +43,7 @@ Source of truth: `.github/test-results/README.md` in the registry, plus the four
 | `error`    | omitted    | **required**         | case threw (decode failure, library error, etc.) |
 | `skipped`  | omitted    | **required**         | runner opted out of running it |
 
-`runner` is a literal constant. `implementation` is `@ethereum-sourcify/clear-signing@<version>` where version is read at runtime from the installed library's `package.json` via `import.meta.resolve` (the library's `exports` field doesn't expose `package.json`, so `require("@…/package.json")` fails — don't try that path again).
+`runner` is a literal constant. `implementation` is `@ethereum-sourcify/clear-signing@<version>` where version is imported at build time via `import pkg from "@ethereum-sourcify/clear-signing/package.json" with { type: "json" }` (the library's `exports` field exposes `./package.json` since 0.1.3).
 
 Exit code is `0` iff the runner ran to completion. A failing case does **not** cause a non-zero exit. Non-zero is reserved for runner-level failures (bad input path, library import failure).
 
@@ -70,19 +68,9 @@ When verified against `registry/aave/shared-tests/calldata-lpv2.tests.json` on t
 
 These are real disagreements, not runner bugs. The task explicitly said "the actual pass/fail outcome depends on the current state of the Sourcify library."
 
-## Library workaround — DO NOT REMOVE WITHOUT CHECKING UPSTREAM
+## EIP-712 typed-data fixtures are not supported
 
-`@ethereum-sourcify/clear-signing@0.1.1` is published as ESM (`"type": "module"`) but its compiled `dist/` uses extensionless relative imports (`from "./resolver"` rather than `from "./resolver.js"`). Two consequences:
-
-- **Runtime**: Node 22 ESM rejects with `ERR_MODULE_NOT_FOUND` on `import "@ethereum-sourcify/clear-signing"`.
-- **Type checking**: with `moduleResolution: "NodeNext"`, TS can't follow the `.d.ts` imports either, which silently breaks the `export type * from "./types"` re-export — so all type imports from the package fail with TS2305 / TS2460.
-
-Workarounds in place:
-
-1. **`scripts/patch-clear-signing.mjs`** runs on `postinstall` and rewrites `node_modules/@ethereum-sourcify/clear-signing/dist/**/*.{js,d.ts}` to add `.js` extensions on relative specifiers. Idempotent.
-2. **`tsconfig.json` uses `moduleResolution: "Bundler"`** because it's more lenient about extensions and resolves the published types correctly even before the patch runs.
-
-When upstream ships a release with proper extensions (e.g., by setting `"module": "NodeNext"` in their tsconfig), delete both the patch script and the postinstall step, and reconsider switching back to `NodeNext` resolution.
+`descriptor-index.ts` only indexes `context.contract.deployments` (calldata). The library's `RegistryIndex.typedDataIndex` requires `Record<string, Record<string, TypedDataIndexEntry[]>>` — keyed on encodeType hashes — and we have no fixture exercising that path yet. Build out the typed-data branch when a real `.tests.json` needs it; don't reintroduce a stub that hands the library bogus index shape.
 
 ## Conventions when working in this repo
 

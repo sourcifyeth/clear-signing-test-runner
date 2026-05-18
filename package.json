@@ -15,7 +15,6 @@
     "build": "tsc && chmod +x dist/cli.js",
     "clean": "rm -rf dist",
     "start": "node dist/cli.js",
-    "postinstall": "node scripts/patch-clear-signing.mjs",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
@@ -29,7 +28,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "@ethereum-sourcify/clear-signing": "^0.1.1",
+    "@ethereum-sourcify/clear-signing": "^0.1.3",
     "commander": "^12.1.0",
     "viem": "^2.21.0"
   },
