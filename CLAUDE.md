@@ -68,9 +68,15 @@ When verified against `registry/aave/shared-tests/calldata-lpv2.tests.json` on t
 
 These are real disagreements, not runner bugs. The task explicitly said "the actual pass/fail outcome depends on the current state of the Sourcify library."
 
-## EIP-712 typed-data fixtures are not supported
+## EIP-712 typed-data indexing
 
-`descriptor-index.ts` only indexes `context.contract.deployments` (calldata). The library's `RegistryIndex.typedDataIndex` requires `Record<string, Record<string, TypedDataIndexEntry[]>>` — keyed on encodeType hashes — and we have no fixture exercising that path yet. Build out the typed-data branch when a real `.tests.json` needs it; don't reintroduce a stub that hands the library bogus index shape.
+`descriptor-index.ts` handles both branches:
+- **Calldata**: walks `context.contract.deployments`, populates `calldataIndex["eip155:chainId:addr"] = file`.
+- **Typed-data**: walks `display.formats` keys, extracts primary type via `/^(\w+)\(/`, hashes each key with `keccak256` (`@noble/hashes`), and emits `typedDataIndex[caip][primaryType].push({path, encodeTypeHashes})` per `context.eip712.deployments`.
+
+This mirrors the library's internal `indexDescriptor` (at line ~1788 of the bundled `dist/index.js`). When `context.contract` is present, the typed-data branch is skipped — descriptors are one or the other.
+
+The typed-data branch has not been validated against a real `.tests.json` fixture (none exist yet). If a future fixture surfaces drift, the library's `indexDescriptor` is the source of truth; mirror any changes there.
 
 ## Conventions when working in this repo
 

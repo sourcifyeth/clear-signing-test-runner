@@ -7,26 +7,25 @@ A CLI that drives [`@ethereum-sourcify/clear-signing`](https://github.com/sourci
 For each test case in a `.tests.json` file, the runner:
 
 1. Loads the referenced ERC-7730 descriptor JSON.
-2. Builds an in-memory registry index from the descriptor's `context.contract.deployments` / `context.eip712.deployments`, so the library never hits the network.
+2. Builds an in-memory registry index from the descriptor (calldata via `context.contract.deployments`; EIP-712 via `context.eip712.deployments` + `display.formats`, hashing each format key with keccak256 and grouping by primary type), so the library never hits the network.
 3. Decodes the raw signed transaction (viem) to extract `chainId`, `to`, `data`, `value`.
 4. Calls `format()` with an `externalDataProvider` shimmed from the fixture's static `dataProvider` block.
 5. Maps the library's `DisplayModel` onto the spec's `{ intent, owner, fields }` shape and deep-compares it against `expected`.
 6. Writes one entry per case to `results.json` (atomically — written to a temp file and renamed).
 
-## Install
-
-```bash
-npm install
-npm run build
-```
-
 ## Usage
 
+This repo is meant to be cloned in CI and invoked directly — it is not published to npm. The canonical CI flow is:
+
 ```bash
-clear-signing-test-runner <tests-file> --output <results-file> [--verbose]
+git clone https://github.com/sourcifyeth/clear-signing-test-runner.git
+cd clear-signing-test-runner
+npm ci
+npm run build
+node dist/cli.js <tests-file> --output <results-file> [--verbose]
 ```
 
-Example:
+Requires Node >= 22. Example invocation:
 
 ```bash
 node dist/cli.js registry/aave/shared-tests/calldata-lpv2.tests.json \
@@ -91,7 +90,7 @@ node dist/cli.js registry/aave/shared-tests/calldata-lpv2.tests.json \
 ```json
 {
   "runner": "@ethereum-sourcify/clear-signing-test-runner",
-  "implementation": "@ethereum-sourcify/clear-signing@0.1.1",
+  "implementation": "@ethereum-sourcify/clear-signing@0.1.3",
   "cases": [
     {
       "description": "Repay All USDC variable rate",
@@ -119,7 +118,7 @@ node dist/cli.js registry/aave/shared-tests/calldata-lpv2.tests.json \
 
 The runner never emits `skipped` on its own — that status exists for future opt-out logic.
 
-`implementation` is `@ethereum-sourcify/clear-signing@<version>` where `<version>` is read at runtime from the installed library's `package.json`.
+`implementation` is `@ethereum-sourcify/clear-signing@<version>` where `<version>` is read at build time via `import pkg from "@ethereum-sourcify/clear-signing/package.json" with { type: "json" }` (the library exposes `./package.json` in its `exports` field).
 
 ### Field-value shape
 

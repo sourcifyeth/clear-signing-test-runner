@@ -52,7 +52,7 @@ function compareFieldMap(
   }
 
   for (const k of expectedKeys) {
-    const r = compareValue(actual[k]!, expected[k]!, `${path}.${k}`);
+    const r = compareValue(actual[k]!, expected[k]!, `${path}[${JSON.stringify(k)}]`);
     if (!r.ok) return r;
   }
   return { ok: true, message: "" };
