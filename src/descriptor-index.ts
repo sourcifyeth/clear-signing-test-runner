@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { keccak_256 } from "@noble/hashes/sha3.js";
 
+import { eip712 } from "@ethereum-sourcify/clear-signing";
 import type { RegistryIndex } from "@ethereum-sourcify/clear-signing";
 
 interface Deployment {
@@ -75,7 +76,7 @@ export async function buildIndexFromDescriptorFile(
 
   const hashesByPrimaryType = new Map<string, string[]>();
   for (const encodeTypeStr of Object.keys(formats)) {
-    const primaryType = extractPrimaryType(encodeTypeStr);
+    const primaryType = eip712.extractPrimaryType(encodeTypeStr);
     if (!primaryType) continue;
     const hash = keccak256Hex(encodeTypeStr);
     const list = hashesByPrimaryType.get(primaryType) ?? [];
@@ -97,10 +98,6 @@ export async function buildIndexFromDescriptorFile(
   }
 
   return { descriptorDirectory: dir, index };
-}
-
-function extractPrimaryType(encodeTypeStr: string): string | undefined {
-  return encodeTypeStr.match(/^(\w+)\(/)?.[1];
 }
 
 function keccak256Hex(asciiInput: string): string {

@@ -28,7 +28,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "@ethereum-sourcify/clear-signing": "^0.1.3",
+    "@ethereum-sourcify/clear-signing": "^0.1.4",
     "@noble/hashes": "^2.2.0",
     "commander": "^12.1.0",
     "viem": "^2.21.0"

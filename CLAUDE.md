@@ -57,15 +57,15 @@ The library returns a `DisplayModel`; we flatten it to `{intent: string, owner: 
 
 `compareRendered` is order-independent on object keys, exact-match on strings (no trim, no case normalization).
 
-## The fixture-vs-library divergence
+## Verified outcome on aave
 
-When verified against `registry/aave/shared-tests/calldata-lpv2.tests.json` on the `common-test-strategy` branch (use [`manuelwedler/clear-signing-erc7730-registry`](https://github.com/manuelwedler/clear-signing-erc7730-registry/tree/common-test-strategy), not upstream), the current outcome is one `pass` and two `fail`:
+Against `registry/aave/shared-tests/calldata-lpv2.tests.json` on the `common-test-strategy` branch (use [`manuelwedler/clear-signing-erc7730-registry`](https://github.com/manuelwedler/clear-signing-erc7730-registry/tree/common-test-strategy), not upstream) with library `>= 0.1.4`, all three cases pass:
 
-1. **Repay All USDC** (fail) — library renders max-uint amounts literally instead of substituting the descriptor's `params.message: "All"`. Likely a `threshold` / constants-resolution gap in the library.
-2. **Manage collateral — disable WETH** (pass).
-3. **Withdraw Max WETH** (fail) — same library issue as case 1 on `Amount to withdraw`. The `To recipient` field now renders correctly as `"sosalkin.eth"`.
+- Repay All USDC variable rate — pass
+- Manage collateral — disable WETH — pass
+- Withdraw Max WETH to sosalkin.eth — pass
 
-The two fails are real library limitations, not runner bugs. The task explicitly said "the actual pass/fail outcome depends on the current state of the Sourcify library."
+The earlier `threshold`/`message` constant-substitution and addressName rendering issues were resolved upstream (library 0.1.4) and locally (mapper change to emit plain strings for `addressName`). Future regressions on this fixture should be tracked back to the library before the runner.
 
 ## EIP-712 typed-data indexing
 
