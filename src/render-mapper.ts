@@ -12,11 +12,13 @@ import type { RenderedDisplay, RenderedValue } from "./types.js";
  * results contract expects:
  *   { intent: string, owner: string, fields: { label: string | nested } }
  *
- * Nested objects appear for:
- *   - groups (DisplayFieldGroup) — emitted as { groupLabel: { ...inner } }
- *   - addressName fields whose value is a human-readable name distinct from
- *     the underlying address — emitted as { Name, Address }
- *   - embedded calldata fields — emitted as a nested RenderedDisplay
+ * Fields are a flat `{label: value}` map. Groups (`DisplayFieldGroup`) are
+ * flattened — their `label` is dropped and their inner fields are merged into
+ * the parent map. Test fixtures' `expected` blocks are authored this way too.
+ *
+ * The only nesting comes from `calldata` embedded calldata fields, which
+ * emit a `{intent, owner, fields}` object recursively shaped like a
+ * top-level RenderedDisplay.
  */
 export function mapDisplayModel(model: DisplayModel): RenderedDisplay {
   return {
@@ -42,8 +44,11 @@ function mapFields(
   const out: { [label: string]: RenderedValue } = {};
   for (const f of fields) {
     if (isFieldGroup(f)) {
-      const label = f.label ?? "";
-      out[label] = mapFields(f.fields);
+      // Groups are flattened: drop the group label, merge inner entries
+      // into the parent map. Nested groups recurse and collapse as well.
+      for (const [label, value] of Object.entries(mapFields(f.fields))) {
+        out[label] = value;
+      }
     } else {
       out[f.label] = mapField(f);
     }
@@ -55,16 +60,6 @@ function mapField(field: DisplayField): RenderedValue {
   if (field.embeddedCalldata?.display) {
     const inner = mapDisplayModel(field.embeddedCalldata.display);
     return { intent: inner.intent, owner: inner.owner, fields: inner.fields };
-  }
-
-  if (
-    (field.format === "addressName" ||
-      field.format === "interoperableAddressName") &&
-    field.rawAddress &&
-    field.value &&
-    field.value.toLowerCase() !== field.rawAddress.toLowerCase()
-  ) {
-    return { Name: field.value, Address: field.rawAddress };
   }
 
   return field.value;

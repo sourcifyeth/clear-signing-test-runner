@@ -51,22 +51,21 @@ Exit code is `0` iff the runner ran to completion. A failing case does **not** c
 
 The library returns a `DisplayModel`; we flatten it to `{intent: string, owner: string, fields: {label: RenderedValue}}` where `RenderedValue = string | {label: RenderedValue}`. Specifically:
 
-- **String** by default — `field.value` verbatim.
-- **`addressName` / `interoperableAddressName`**: emit `{Name, Address}` *only* when `field.rawAddress` exists and `field.value.toLowerCase() !== field.rawAddress.toLowerCase()` (i.e., a human-readable name actually resolved). Otherwise emit the plain string. Lowercase compare matters — `rawAddress` is EIP-55 checksum.
-- **Group (`DisplayFieldGroup`)**: emit `{groupLabel: {...recursed fields}}`. Empty groups → `{}`.
+- **String** by default — `field.value` verbatim. This includes `addressName` / `interoperableAddressName` fields: emit the library's resolved string (whether it's a human-readable name or a raw address fallback). **Do not** split into a `{Name, Address}` object — only the `calldata` formatter produces a nested object.
+- **Group (`DisplayFieldGroup`)**: **flatten**. Drop the group `label` and merge inner entries into the parent `fields` map. Nested groups recurse and collapse the same way. Test fixtures author `expected` blocks this way too — no group wrappers. (The registry spec README implies groups should be nested objects, but the project's convention here is flat. Don't reintroduce wrapping without checking with the user.)
 - **`calldata` with `embeddedCalldata.display`**: emit `{intent, owner, fields}` — a nested `RenderedDisplay`-shaped object. The aave fixture doesn't exercise this path, so the exact shape is a judgment call; revisit when a real fixture appears.
 
 `compareRendered` is order-independent on object keys, exact-match on strings (no trim, no case normalization).
 
 ## The fixture-vs-library divergence
 
-When verified against `registry/aave/shared-tests/calldata-lpv2.tests.json` on the `common-test-strategy` branch (use [`manuelwedler/clear-signing-erc7730-registry`](https://github.com/manuelwedler/clear-signing-erc7730-registry/tree/common-test-strategy), not upstream), all three cases produce well-formed entries but all three currently `fail`:
+When verified against `registry/aave/shared-tests/calldata-lpv2.tests.json` on the `common-test-strategy` branch (use [`manuelwedler/clear-signing-erc7730-registry`](https://github.com/manuelwedler/clear-signing-erc7730-registry/tree/common-test-strategy), not upstream), the current outcome is one `pass` and two `fail`:
 
-1. **Repay All USDC** — library renders max-uint amounts literally instead of substituting the descriptor's `params.message: "All"`. Likely a `threshold` / constants-resolution gap in the library.
-2. **Manage collateral — disable WETH** — fixture's `expected` is `"For asset": "WETH"` (bare string). Our mapper produces `{Name: "WETH", Address: "0xC02..."}` because the library resolved the contract-label name and gave us `rawAddress`. Two equally defensible interpretations of the spec — the README pass example shows nested, the aave fixture expects bare. Don't change the mapper to match one fixture's convention without confirming the registry's official position.
-3. **Withdraw Max WETH** — same two issues combined.
+1. **Repay All USDC** (fail) — library renders max-uint amounts literally instead of substituting the descriptor's `params.message: "All"`. Likely a `threshold` / constants-resolution gap in the library.
+2. **Manage collateral — disable WETH** (pass).
+3. **Withdraw Max WETH** (fail) — same library issue as case 1 on `Amount to withdraw`. The `To recipient` field now renders correctly as `"sosalkin.eth"`.
 
-These are real disagreements, not runner bugs. The task explicitly said "the actual pass/fail outcome depends on the current state of the Sourcify library."
+The two fails are real library limitations, not runner bugs. The task explicitly said "the actual pass/fail outcome depends on the current state of the Sourcify library."
 
 ## EIP-712 typed-data indexing
 

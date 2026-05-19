@@ -122,11 +122,11 @@ The runner never emits `skipped` on its own — that status exists for future op
 
 ### Field-value shape
 
-Field values are strings, except:
+`fields` is a flat `{label: value}` map. Field values are strings, except:
 
-- **Groups (`DisplayFieldGroup`)** — emitted as `{ groupLabel: { ...inner } }`.
-- **`addressName` / `interoperableAddressName` with a resolved name** — emitted as `{ Name, Address }` when the library produced a `rawAddress` and a human-readable `value` distinct from it. When the address didn't resolve, the value falls back to a plain string (the raw address).
 - **`calldata` formatters with `embeddedCalldata.display`** — emitted as `{ intent, owner, fields }`, recursively shaped like a top-level `rendered`.
+
+**Groups are flattened.** When the library returns a `DisplayFieldGroup`, its `label` is dropped and its inner fields are merged directly into the parent `fields` map (nested groups collapse the same way). Author `.tests.json` `expected` blocks the same way — no group wrapper objects.
 
 ## Verification: aave calldata-lpv2
 
