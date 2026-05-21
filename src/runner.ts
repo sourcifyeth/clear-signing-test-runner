@@ -2,6 +2,7 @@ import { readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 import { format, formatTypedData } from "@ethereum-sourcify/clear-signing";
+import type { Warning } from "@ethereum-sourcify/clear-signing";
 import implementationPkg from "@ethereum-sourcify/clear-signing/package.json" with { type: "json" };
 
 import { compareRendered } from "./compare.js";
@@ -90,7 +91,7 @@ async function runOneCase(
       description: tc.description,
       status: "fail",
       rendered,
-      message: cmp.message,
+      message: appendWarnings(cmp.message, model.warnings),
     };
   } catch (err) {
     return {
@@ -103,6 +104,21 @@ async function runOneCase(
 
 function isEip712Case(tc: TestCaseInput): tc is Eip712TestCaseInput {
   return "data" in tc;
+}
+
+/**
+ * Surface library warnings on a `fail`. Without this, an empty render
+ * (e.g. when no descriptor matched) bottoms out at a generic
+ * "intent mismatch: expected 'Borrow', got ''" with no clue as to why
+ * everything is empty — the warning is what tells you.
+ */
+function appendWarnings(
+  message: string,
+  warnings: Warning[] | undefined,
+): string {
+  if (!warnings?.length) return message;
+  const formatted = warnings.map((w) => `${w.code}: ${w.message}`).join("; ");
+  return `${message} (library warnings: ${formatted})`;
 }
 
 function resolverOptions(ctx: RunContext) {
