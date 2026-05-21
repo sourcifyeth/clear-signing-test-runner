@@ -18,6 +18,13 @@ export function compareRendered(
   if (actual.intent !== expected.intent) {
     return mismatch("intent", expected.intent, actual.intent);
   }
+  if (actual.interpolatedIntent !== expected.interpolatedIntent) {
+    return mismatch(
+      "interpolatedIntent",
+      expected.interpolatedIntent,
+      actual.interpolatedIntent,
+    );
+  }
   if (actual.owner !== expected.owner) {
     return mismatch("owner", expected.owner, actual.owner);
   }

@@ -9,15 +9,13 @@ export type RenderedValue = string | { [label: string]: RenderedValue };
 
 export interface RenderedDisplay {
   intent: string;
+  interpolatedIntent?: string;
   owner: string;
   fields: { [label: string]: RenderedValue };
 }
 
 export interface DataProviderInput {
-  tokens?: Record<
-    string,
-    { symbol: string; decimals: number; name: string }
-  >;
+  tokens?: Record<string, { symbol: string; decimals: number; name: string }>;
   addressNames?: Record<string, string>;
   nftCollectionNames?: Record<string, string>;
   /** Block height (decimal string key) → Unix timestamp in seconds. */

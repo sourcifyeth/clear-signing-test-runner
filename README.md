@@ -144,9 +144,11 @@ The runner never emits `skipped` on its own — that status exists for future op
 
 ### Field-value shape
 
+`rendered` has the shape `{intent, interpolatedIntent?, owner, fields}`. `interpolatedIntent` is included when the library produces one (the descriptor declared a templated intent that resolved against the transaction data, e.g. `"Swap 100 USDC for DAI"`); it is omitted otherwise. The `intent` field stays the un-interpolated literal form (e.g. `"Swap"`). Both are compared exactly when both sides have them; one-sided presence is treated as a mismatch.
+
 `fields` is a flat `{label: value}` map. Field values are strings, except:
 
-- **`calldata` formatters with `embeddedCalldata.display`** — emitted as `{ intent, owner, fields }`, recursively shaped like a top-level `rendered`.
+- **`calldata` formatters with `embeddedCalldata.display`** — emitted as `{ intent, interpolatedIntent?, owner, fields }`, recursively shaped like a top-level `rendered`.
 
 **Groups are flattened.** When the library returns a `DisplayFieldGroup`, its `label` is dropped and its inner fields are merged directly into the parent `fields` map (nested groups collapse the same way). Author `.tests.json` `expected` blocks the same way — no group wrapper objects.
 

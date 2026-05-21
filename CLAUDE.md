@@ -55,11 +55,18 @@ Exit code is `0` iff the runner ran to completion. A failing case does **not** c
 
 ## Field-value mapping rules
 
-The library returns a `DisplayModel`; we flatten it to `{intent: string, owner: string, fields: {label: RenderedValue}}` where `RenderedValue = string | {label: RenderedValue}`. Specifically:
+The library returns a `DisplayModel`; we flatten it to `{intent, interpolatedIntent?, owner, fields}`:
+
+- **`intent`** is the literal/un-interpolated form (the library's `intent` after string-coercion via `renderIntent` — when intent is a Record we join `key: value` pairs with commas).
+- **`interpolatedIntent`** is copied from `model.interpolatedIntent` when present, omitted otherwise. The registry spec compares this exactly: if `expected.interpolatedIntent` is set, actual must match; if both sides omit it, equal; if one is present and the other isn't, mismatch.
+- **`owner`** comes from `model.metadata?.owner ?? ""`.
+- **`fields`** is the flat `{label: RenderedValue}` map produced by `mapFields`.
+
+Field-value rules:
 
 - **String** by default — `field.value` verbatim. This includes `addressName` / `interoperableAddressName` fields: emit the library's resolved string (whether it's a human-readable name or a raw address fallback). **Do not** split into a `{Name, Address}` object — only the `calldata` formatter produces a nested object.
 - **Group (`DisplayFieldGroup`)**: **flatten**. Drop the group `label` and merge inner entries into the parent `fields` map. Nested groups recurse and collapse the same way. Test fixtures author `expected` blocks this way too — no group wrappers. (The registry spec README implies groups should be nested objects, but the project's convention here is flat. Don't reintroduce wrapping without checking with the user.)
-- **`calldata` with `embeddedCalldata.display`**: emit `{intent, owner, fields}` — a nested `RenderedDisplay`-shaped object. The aave fixture doesn't exercise this path, so the exact shape is a judgment call; revisit when a real fixture appears.
+- **`calldata` with `embeddedCalldata.display`**: emit a recursive `{intent, interpolatedIntent?, owner, fields}` object — same shape as top-level rendered. The aave fixture doesn't exercise this path, so the exact shape is a judgment call; revisit when a real fixture appears.
 
 `compareRendered` is order-independent on object keys, exact-match on strings (no trim, no case normalization).
 

@@ -21,11 +21,15 @@ import type { RenderedDisplay, RenderedValue } from "./types.js";
  * top-level RenderedDisplay.
  */
 export function mapDisplayModel(model: DisplayModel): RenderedDisplay {
-  return {
+  const out: RenderedDisplay = {
     intent: renderIntent(model.intent),
     owner: model.metadata?.owner ?? "",
     fields: mapFields(model.fields ?? []),
   };
+  if (model.interpolatedIntent !== undefined) {
+    out.interpolatedIntent = model.interpolatedIntent;
+  }
+  return out;
 }
 
 function renderIntent(
@@ -59,7 +63,15 @@ function mapFields(
 function mapField(field: DisplayField): RenderedValue {
   if (field.embeddedCalldata?.display) {
     const inner = mapDisplayModel(field.embeddedCalldata.display);
-    return { intent: inner.intent, owner: inner.owner, fields: inner.fields };
+    const nested: { [label: string]: RenderedValue } = {
+      intent: inner.intent,
+      owner: inner.owner,
+      fields: inner.fields,
+    };
+    if (inner.interpolatedIntent !== undefined) {
+      nested.interpolatedIntent = inner.interpolatedIntent;
+    }
+    return nested;
   }
 
   return field.value;
