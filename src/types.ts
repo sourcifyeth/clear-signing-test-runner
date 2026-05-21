@@ -16,17 +16,36 @@ export interface RenderedDisplay {
 export interface DataProviderInput {
   tokens?: Record<
     string,
-    { symbol?: string; decimals?: number; name?: string }
+    { symbol: string; decimals: number; name: string }
   >;
   addressNames?: Record<string, string>;
+  nftCollectionNames?: Record<string, string>;
+  /** Block height (decimal string key) → Unix timestamp in seconds. */
+  blockTimestamps?: Record<string, number>;
 }
 
-export interface TestCaseInput {
+/** EIP-712 typed-data input as carried in a test case. */
+export interface Eip712TypedDataInput {
+  types: Record<string, { name: string; type: string }[]>;
+  primaryType: string;
+  domain: Record<string, unknown>;
+  message: Record<string, unknown>;
+}
+
+export interface CalldataTestCaseInput {
   description: string;
   rawTx: string;
   txHash?: string;
   expected: RenderedDisplay;
 }
+
+export interface Eip712TestCaseInput {
+  description: string;
+  data: Eip712TypedDataInput;
+  expected: RenderedDisplay;
+}
+
+export type TestCaseInput = CalldataTestCaseInput | Eip712TestCaseInput;
 
 export interface TestsFileInput {
   $schema?: string;

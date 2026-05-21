@@ -1,7 +1,7 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import { format } from "@ethereum-sourcify/clear-signing";
+import { format, formatTypedData } from "@ethereum-sourcify/clear-signing";
 import implementationPkg from "@ethereum-sourcify/clear-signing/package.json" with { type: "json" };
 
 import { compareRendered } from "./compare.js";
@@ -11,7 +11,10 @@ import { decodeRawTx } from "./raw-tx.js";
 import { mapDisplayModel } from "./render-mapper.js";
 import type {
   CaseResult,
+  Eip712TestCaseInput,
+  CalldataTestCaseInput,
   ResultsFile,
+  TestCaseInput,
   TestsFileInput,
 } from "./types.js";
 
@@ -63,32 +66,20 @@ export async function runTests(opts: RunOptions): Promise<ResultsFile> {
   return results;
 }
 
+type RunContext = {
+  descriptorDirectory: string;
+  index: import("@ethereum-sourcify/clear-signing").RegistryIndex;
+  externalDataProvider: import("@ethereum-sourcify/clear-signing").ExternalDataProvider;
+};
+
 async function runOneCase(
-  tc: TestsFileInput["tests"][number],
-  ctx: {
-    descriptorDirectory: string;
-    index: import("@ethereum-sourcify/clear-signing").RegistryIndex;
-    externalDataProvider: import("@ethereum-sourcify/clear-signing").ExternalDataProvider;
-  },
+  tc: TestCaseInput,
+  ctx: RunContext,
 ): Promise<CaseResult> {
   try {
-    const decoded = decodeRawTx(tc.rawTx);
-    const model = await format(
-      {
-        chainId: decoded.chainId,
-        to: decoded.to,
-        data: decoded.data,
-        value: decoded.value,
-      },
-      {
-        descriptorResolverOptions: {
-          type: "embedded",
-          index: ctx.index,
-          descriptorDirectory: ctx.descriptorDirectory,
-        },
-        externalDataProvider: ctx.externalDataProvider,
-      },
-    );
+    const model = isEip712Case(tc)
+      ? await formatTypedDataCase(tc, ctx)
+      : await formatCalldataCase(tc, ctx);
 
     const rendered = mapDisplayModel(model);
     const cmp = compareRendered(rendered, tc.expected);
@@ -108,6 +99,45 @@ async function runOneCase(
       message: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+function isEip712Case(tc: TestCaseInput): tc is Eip712TestCaseInput {
+  return "data" in tc;
+}
+
+function resolverOptions(ctx: RunContext) {
+  return {
+    descriptorResolverOptions: {
+      type: "embedded" as const,
+      index: ctx.index,
+      descriptorDirectory: ctx.descriptorDirectory,
+    },
+    externalDataProvider: ctx.externalDataProvider,
+  };
+}
+
+async function formatCalldataCase(tc: CalldataTestCaseInput, ctx: RunContext) {
+  const decoded = decodeRawTx(tc.rawTx);
+  return format(
+    {
+      chainId: decoded.chainId,
+      to: decoded.to,
+      data: decoded.data,
+      value: decoded.value,
+    },
+    resolverOptions(ctx),
+  );
+}
+
+async function formatTypedDataCase(tc: Eip712TestCaseInput, ctx: RunContext) {
+  // The fixture's `data` doesn't carry `account`; the library uses it only
+  // for `@.from` references. Pass the zero address as a placeholder — if a
+  // descriptor really depends on a signer-specific value, it'll surface as
+  // a warning in the rendered output.
+  return formatTypedData(
+    { account: "0x0000000000000000000000000000000000000000", ...tc.data },
+    resolverOptions(ctx),
+  );
 }
 
 async function writeAtomic(path: string, content: string): Promise<void> {
