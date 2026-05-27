@@ -1,6 +1,5 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFile } from "node:fs/promises";
+import { basename, dirname, resolve } from "node:path";
 
 import { keccak_256 } from "@noble/hashes/sha3.js";
 
@@ -23,16 +22,18 @@ interface DescriptorShape {
 }
 
 interface EmbeddedDescriptorBundle {
-  /** Filesystem directory containing the descriptor module(s). */
+  /** Filesystem directory containing the descriptor and its `includes` siblings. */
   descriptorDirectory: string;
-  /** Index keying CAIP-10 ids to the file under `descriptorDirectory`. */
+  /** Index keying CAIP-10 ids to the descriptor's basename under `descriptorDirectory`. */
   index: RegistryIndex;
 }
 
 /**
- * Stage the descriptor JSON at `descriptorPath` into a temp directory as a
- * `.mjs` module (so the library's `await import()` works without JSON import
- * attributes), and build a RegistryIndex from the descriptor.
+ * Build a RegistryIndex from a descriptor JSON file on disk, pointing the
+ * library straight at the registry directory. No staging — the library
+ * loads the descriptor via dynamic `import(path, { with: { type: "json" } })`
+ * (since @ethereum-sourcify/clear-signing >= 0.1.5), and resolves any
+ * `includes` siblings in the same directory natively.
  *
  * Mirrors the library's internal `indexDescriptor`:
  *   - calldata descriptors (`context.contract.deployments`) populate
@@ -40,8 +41,7 @@ interface EmbeddedDescriptorBundle {
  *   - EIP-712 descriptors (`context.eip712.deployments` + `display.formats`)
  *     populate `typedDataIndex` keyed by CAIP-10 → primary type name →
  *     `{path, encodeTypeHashes[]}`. Hashes are `keccak256` over the raw
- *     `display.formats` key (the encodeType string) verbatim, hex-encoded
- *     with a `0x` prefix.
+ *     `display.formats` key verbatim, hex-encoded with a `0x` prefix.
  *
  * A descriptor is one or the other; if both contexts are present, calldata
  * wins (matches library behavior).
@@ -49,12 +49,13 @@ interface EmbeddedDescriptorBundle {
 export async function buildIndexFromDescriptorFile(
   descriptorPath: string,
 ): Promise<EmbeddedDescriptorBundle> {
-  const raw = await readFile(descriptorPath, "utf8");
-  const descriptor = JSON.parse(raw) as DescriptorShape;
+  const absolute = resolve(descriptorPath);
+  const descriptorDirectory = dirname(absolute);
+  const file = basename(absolute);
 
-  const dir = await mkdtemp(join(tmpdir(), "clear-signing-runner-"));
-  const file = "descriptor.mjs";
-  await writeFile(join(dir, file), `export default ${raw};\n`, "utf8");
+  const descriptor = JSON.parse(
+    await readFile(absolute, "utf8"),
+  ) as DescriptorShape;
 
   const index: RegistryIndex = { calldataIndex: {}, typedDataIndex: {} };
 
@@ -65,13 +66,13 @@ export async function buildIndexFromDescriptorFile(
       const key = `eip155:${d.chainId}:${d.address.toLowerCase()}`;
       index.calldataIndex[key] ??= file;
     }
-    return { descriptorDirectory: dir, index };
+    return { descriptorDirectory, index };
   }
 
   const eip712Deployments = descriptor.context?.eip712?.deployments;
   const formats = descriptor.display?.formats;
   if (!eip712Deployments?.length || !formats) {
-    return { descriptorDirectory: dir, index };
+    return { descriptorDirectory, index };
   }
 
   const hashesByPrimaryType = new Map<string, string[]>();
@@ -84,7 +85,7 @@ export async function buildIndexFromDescriptorFile(
     hashesByPrimaryType.set(primaryType, list);
   }
   if (hashesByPrimaryType.size === 0) {
-    return { descriptorDirectory: dir, index };
+    return { descriptorDirectory, index };
   }
 
   for (const d of eip712Deployments) {
@@ -97,7 +98,7 @@ export async function buildIndexFromDescriptorFile(
     }
   }
 
-  return { descriptorDirectory: dir, index };
+  return { descriptorDirectory, index };
 }
 
 function keccak256Hex(asciiInput: string): string {

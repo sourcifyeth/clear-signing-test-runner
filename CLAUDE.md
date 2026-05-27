@@ -14,7 +14,7 @@ npm run build        # tsc + chmod +x dist/cli.js
 node dist/cli.js <tests-file> -o <results-file> [--verbose]
 ```
 
-Node >= 22. ESM only. TypeScript with `moduleResolution: "NodeNext"`. Requires `@ethereum-sourcify/clear-signing >= 0.1.3` — earlier versions ship extensionless relative imports that break Node ESM at runtime. If you must work with 0.1.1, see the git history for the postinstall patch + `Bundler` resolution workaround.
+Node >= 22. ESM only. TypeScript with `moduleResolution: "NodeNext"`. Requires `@ethereum-sourcify/clear-signing >= 0.1.5` — earlier versions either ship extensionless relative imports (broken in Node ESM) or load embedded descriptors via dynamic JSON `import()` without the `with { type: "json" }` attribute (which forces the runner to wrap every descriptor as a `.mjs` module). The git history of `descriptor-index.ts` shows the `.mjs` staging workaround if you ever need to pin to an older library.
 
 ## Module layout
 
@@ -25,8 +25,10 @@ src/
                       compare → write atomic. Dispatches calldata vs
                       EIP-712 by presence of `rawTx` vs `data` on the case.
   raw-tx.ts           viem.parseTransaction → {chainId, to, data, value}
-  descriptor-index.ts builds RegistryIndex from descriptor deployments,
-                      stages descriptor JSON as a .mjs module in os.tmpdir()
+  descriptor-index.ts builds RegistryIndex from descriptor deployments;
+                      points descriptorDirectory at the descriptor's own
+                      registry folder so the library loads it and its
+                      `includes` siblings in place (no staging)
   data-provider.ts    maps fixture dataProvider → ExternalDataProvider
                       (tokens/addressNames/nftCollectionNames/blockTimestamps)
   chain-info.ts       lazy fetch + cache of chainid.network/chains_mini.json
@@ -88,6 +90,12 @@ Source of truth: [`specs/erc7730-tests-v2.schema.json`](https://github.com/manue
 - **EIP-712** — has `data: {types, primaryType, domain, message}` (no `rawTx`). Routed through `formatTypedData()`. We inject `account: "0x0…0"` because the schema doesn't carry one; the library uses it only for `@.from` references.
 
 `dataProvider` supports four static blocks (`tokens`, `addressNames`, `nftCollectionNames`, `blockTimestamps`) plus the dynamically-fetched chain info — see the data-provider table in the README.
+
+## Descriptor loading & `includes`
+
+`descriptor-index.ts` does **no staging** — `descriptorDirectory` is set to the descriptor's own directory in the registry checkout, and the index value is the descriptor's basename (`calldata-foo.json`). The library loads it via `import(path, { with: { type: "json" } })` (introduced in `@ethereum-sourcify/clear-signing@0.1.5`) and resolves any `includes: "common-bar.json"` sibling in the same directory automatically.
+
+Pre-0.1.5 the library used `import(path)` without the JSON attribute, so the runner had to wrap each descriptor (and every transitive include) as a `.mjs` module in a temp dir, rewriting `includes` pointers to match. Git history of this file shows that workaround if needed.
 
 ## EIP-712 typed-data indexing
 
