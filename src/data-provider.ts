@@ -12,7 +12,8 @@ import type { DataProviderInput } from "./types.js";
 
 /**
  * Build an ExternalDataProvider from the test file's static dataProvider
- * block (tokens, addressNames, nftCollectionNames, blockTimestamps).
+ * block (tokens, addressNames, ensNames, nftCollectionNames,
+ * blockTimestamps).
  *
  * Address lookups are case-insensitive; anything not present in the mock
  * returns null, which lets the library fall back to raw rendering for that
@@ -24,18 +25,10 @@ export function buildExternalDataProvider(
   input: DataProviderInput | undefined,
 ): ExternalDataProvider {
   const tokens = lowercaseKeys(input?.tokens ?? {});
+  const localNames = lowercaseKeys(input?.addressNames ?? {});
+  const ensNames = lowercaseKeys(input?.ensNames ?? {});
   const nftCollectionNames = lowercaseKeys(input?.nftCollectionNames ?? {});
   const blockTimestamps = input?.blockTimestamps ?? {};
-
-  const localNames: Record<string, string> = {};
-  const ensNames: Record<string, string> = {};
-  for (const [addr, name] of Object.entries(input?.addressNames ?? {})) {
-    if (name.toLowerCase().endsWith(".eth")) {
-      ensNames[addr.toLowerCase()] = name;
-    } else {
-      localNames[addr.toLowerCase()] = name;
-    }
-  }
 
   return {
     resolveToken: async (

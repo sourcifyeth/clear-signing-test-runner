@@ -62,7 +62,9 @@ The schema is defined at [`specs/erc7730-tests-v2.schema.json`](https://github.c
       }
     },
     "addressNames": {
-      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": "WETH",
+      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": "WETH"
+    },
+    "ensNames": {
       "0xd20c9018a5097e922e9c0539aef389c871e76c3f": "sosalkin.eth"
     },
     "nftCollectionNames": {
@@ -102,7 +104,8 @@ The schema is defined at [`specs/erc7730-tests-v2.schema.json`](https://github.c
 | Block | Library hook | Notes |
 | ----- | ------------ | ----- |
 | `tokens` (`addr → {symbol, decimals, name}`) | `resolveToken` | `symbol`, `decimals`, `name` are all required per v2 schema. |
-| `addressNames` (`addr → name`) | `resolveLocalName` / `resolveEnsName` | Names ending in `.eth` route to `resolveEnsName`, everything else to `resolveLocalName`. Both return `typeMatch: true` so descriptor type filters don't fire spurious warnings. |
+| `addressNames` (`addr → name`) | `resolveLocalName` | Local (non-ENS) display names. Returns `typeMatch: true` so descriptor type filters don't fire spurious warnings. |
+| `ensNames` (`addr → name`) | `resolveEnsName` | ENS names — separate block from `addressNames`. Returns `typeMatch: true`. |
 | `nftCollectionNames` (`addr → name`) | `resolveNftCollectionName` | Same case-insensitive lookup as tokens. |
 | `blockTimestamps` (decimal block height → Unix seconds) | `resolveBlockTimestamp` | The library passes `bigint`; we key on its decimal string. |
 | *(none — fetched on the fly)* | `resolveChainInfo` | The runner downloads [`chainid.network/chains_mini.json`](https://chainid.network/chains_mini.json) once per process, with retry/backoff, and caches a filtered `{chainId → {name, nativeCurrency}}` map. Required because cross-chain / bridge descriptors can reference foreign chain IDs the fixture author can't enumerate. |

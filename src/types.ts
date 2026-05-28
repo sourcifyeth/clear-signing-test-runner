@@ -16,7 +16,10 @@ export interface RenderedDisplay {
 
 export interface DataProviderInput {
   tokens?: Record<string, { symbol: string; decimals: number; name: string }>;
+  /** Local (non-ENS) display names — feeds `resolveLocalName`. */
   addressNames?: Record<string, string>;
+  /** ENS names — feeds `resolveEnsName`. */
+  ensNames?: Record<string, string>;
   nftCollectionNames?: Record<string, string>;
   /** Block height (decimal string key) → Unix timestamp in seconds. */
   blockTimestamps?: Record<string, number>;
