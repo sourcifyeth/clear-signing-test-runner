@@ -95,6 +95,10 @@ Source of truth: [`specs/erc7730-tests-v2.schema.json`](https://github.com/manue
 
 `descriptor-index.ts` does **no staging** — `descriptorDirectory` is set to the descriptor's own directory in the registry checkout, and the index value is the descriptor's basename (`calldata-foo.json`). The library loads it via `import(path, { with: { type: "json" } })` (introduced in `@ethereum-sourcify/clear-signing@0.1.5`) and resolves any `includes: "common-bar.json"` sibling in the same directory automatically.
 
+For indexing, we read deployments and `display.formats` off the **merged** descriptor — built by recursively walking the `includes` chain and folding each level via the library's exported `mergeDescriptors(root, included)` (since 0.1.7). Mirrors the library's own `resolveWithIncludes` recursion. Without merging we'd miss deployments declared only in an include (the UniswapX / Permit2 pattern, where the root is just `{ includes, display.formats }` and `context.eip712.deployments` lives in the common).
+
+Cycle detection uses a `visited` set of absolute paths. A repeated path throws at index-build time (the whole runner invocation fails) — unlike the library's runtime `CYCLIC_INCLUDES` warning, we can't surface it per-case because there's no per-case context yet. Fix the fixture's chain.
+
 Pre-0.1.5 the library used `import(path)` without the JSON attribute, so the runner had to wrap each descriptor (and every transitive include) as a `.mjs` module in a temp dir, rewriting `includes` pointers to match. Git history of this file shows that workaround if needed.
 
 ## EIP-712 typed-data indexing

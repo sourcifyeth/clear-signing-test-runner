@@ -3,23 +3,12 @@ import { basename, dirname, resolve } from "node:path";
 
 import { keccak_256 } from "@noble/hashes/sha3.js";
 
-import { eip712 } from "@ethereum-sourcify/clear-signing";
-import type { RegistryIndex } from "@ethereum-sourcify/clear-signing";
-
-interface Deployment {
-  chainId?: number;
-  address?: string;
-}
-
-interface DescriptorShape {
-  context?: {
-    contract?: { deployments?: Deployment[] };
-    eip712?: { deployments?: Deployment[] };
-  };
-  display?: {
-    formats?: Record<string, unknown>;
-  };
-}
+import { eip712, mergeDescriptors } from "@ethereum-sourcify/clear-signing";
+import type {
+  Descriptor,
+  DescriptorDeployment,
+  RegistryIndex,
+} from "@ethereum-sourcify/clear-signing";
 
 interface EmbeddedDescriptorBundle {
   /** Filesystem directory containing the descriptor and its `includes` siblings. */
@@ -35,16 +24,22 @@ interface EmbeddedDescriptorBundle {
  * (since @ethereum-sourcify/clear-signing >= 0.1.5), and resolves any
  * `includes` siblings in the same directory natively.
  *
- * Mirrors the library's internal `indexDescriptor`:
- *   - calldata descriptors (`context.contract.deployments`) populate
- *     `calldataIndex`;
- *   - EIP-712 descriptors (`context.eip712.deployments` + `display.formats`)
- *     populate `typedDataIndex` keyed by CAIP-10 → primary type name →
- *     `{path, encodeTypeHashes[]}`. Hashes are `keccak256` over the raw
- *     `display.formats` key verbatim, hex-encoded with a `0x` prefix.
+ * For deployments and formats we merge the root with its include chain via
+ * the library's `mergeDescriptors`, walking the chain recursively (matches
+ * the library's runtime `resolveWithIncludes` since 0.1.7). That gives us
+ * the exact same view the library uses at lookup time, including the
+ * array-replace behavior of the merge (root's deployments override
+ * include's). Without merging we'd miss deployments declared only in an
+ * include (the UniswapX / Permit2 pattern), where the root file is just
+ * `{ includes, display.formats }` and the deployments live in the common.
  *
- * A descriptor is one or the other; if both contexts are present, calldata
- * wins (matches library behavior).
+ * Mirrors the library's `indexDescriptor` selection:
+ *   - if the merged descriptor has `context.contract.deployments`, treat as
+ *     calldata and populate `calldataIndex`;
+ *   - else if `context.eip712.deployments` + `display.formats` are both
+ *     present, populate `typedDataIndex` keyed by CAIP-10 → primary type
+ *     name → `{path, encodeTypeHashes[]}`. Hashes are `keccak256` over
+ *     each `display.formats` key verbatim, hex-encoded with a `0x` prefix.
  */
 export async function buildIndexFromDescriptorFile(
   descriptorPath: string,
@@ -53,15 +48,13 @@ export async function buildIndexFromDescriptorFile(
   const descriptorDirectory = dirname(absolute);
   const file = basename(absolute);
 
-  const descriptor = JSON.parse(
-    await readFile(absolute, "utf8"),
-  ) as DescriptorShape;
+  const descriptor = await loadMergedDescriptor(absolute);
 
   const index: RegistryIndex = { calldataIndex: {}, typedDataIndex: {} };
 
-  const calldataDeployments = descriptor.context?.contract?.deployments;
-  if (calldataDeployments?.length) {
-    for (const d of calldataDeployments) {
+  const contractDeployments = descriptor.context?.contract?.deployments;
+  if (contractDeployments?.length) {
+    for (const d of contractDeployments) {
       if (d.chainId == null || !d.address) continue;
       const key = `eip155:${d.chainId}:${d.address.toLowerCase()}`;
       index.calldataIndex[key] ??= file;
@@ -88,7 +81,7 @@ export async function buildIndexFromDescriptorFile(
     return { descriptorDirectory, index };
   }
 
-  for (const d of eip712Deployments) {
+  for (const d of eip712Deployments as DescriptorDeployment[]) {
     if (d.chainId == null || !d.address) continue;
     const caip = `eip155:${d.chainId}:${d.address.toLowerCase()}`;
     const byPrimaryType = (index.typedDataIndex[caip] ??= {});
@@ -99,6 +92,32 @@ export async function buildIndexFromDescriptorFile(
   }
 
   return { descriptorDirectory, index };
+}
+
+/**
+ * Load the descriptor at `rootPath` and recursively follow its `includes`
+ * chain, merging each level via the library's `mergeDescriptors`. Mirrors
+ * the library's `resolveWithIncludes` (since 0.1.7), including cycle
+ * detection — a repeated path throws so we don't loop forever.
+ */
+async function loadMergedDescriptor(
+  rootPath: string,
+  visited: Set<string> = new Set(),
+): Promise<Descriptor> {
+  const absolute = resolve(rootPath);
+  if (visited.has(absolute)) {
+    throw new Error(
+      `cyclic \`includes\` chain detected at descriptor: ${absolute}`,
+    );
+  }
+  visited.add(absolute);
+
+  const descriptor = JSON.parse(await readFile(absolute, "utf8")) as Descriptor;
+  if (typeof descriptor.includes !== "string") return descriptor;
+
+  const includePath = resolve(dirname(absolute), descriptor.includes);
+  const included = await loadMergedDescriptor(includePath, visited);
+  return mergeDescriptors(descriptor, included);
 }
 
 function keccak256Hex(asciiInput: string): string {
