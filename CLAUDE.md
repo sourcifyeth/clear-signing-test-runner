@@ -25,10 +25,10 @@ src/
                       compare → write atomic. Dispatches calldata vs
                       EIP-712 by presence of `rawTx` vs `data` on the case.
   raw-tx.ts           viem.parseTransaction → {chainId, to, data, value}
-  descriptor-index.ts builds RegistryIndex from descriptor deployments;
-                      points descriptorDirectory at the descriptor's own
-                      registry folder so the library loads it and its
-                      `includes` siblings in place (no staging)
+  descriptor-index.ts builds a whole-registry RegistryIndex — walks
+                      every calldata-*/eip712-* file under <root>/registry
+                      and <root>/ercs so embedded `calldata` formatters
+                      can resolve the contracts they call into
   data-provider.ts    maps fixture dataProvider → ExternalDataProvider
                       (tokens/addressNames/nftCollectionNames/blockTimestamps)
   chain-info.ts       lazy fetch + cache of chainid.network/chains_mini.json
@@ -95,13 +95,15 @@ Source of truth: [`specs/erc7730-tests-v2.schema.json`](https://github.com/manue
 
 `descriptor-index.ts` does **no staging** — files are read straight from the registry checkout via `import(path, { with: { type: "json" } })` (since `@ethereum-sourcify/clear-signing@0.1.5`).
 
-**`descriptorDirectory` is the common ancestor of every file in the include chain**, not the leaf's parent. Reason: through at least 0.1.8 the library's `resolveIncludePath` walks `..` segments against the index value and silently drops `..` once it runs out of segments to pop. If the index value were a bare basename, an include like `"../../ercs/foo.json"` would have its traversal absorbed and resolve to the wrong filesystem location (the kiln-vault / morpho / UniswapX / Permit2 pattern). By rooting `descriptorDirectory` at the smallest directory that covers the whole chain and storing the leaf as a relative path beneath it, every chain step has enough leading segments for the library's `..` math to land correctly. Sibling-only chains keep working because the common ancestor reduces to the leaf's dirname.
+**Whole-registry indexing.** Every `calldata-*.json` / `eip712-*.json` under `<root>/registry/**` and `<root>/ercs/**` gets indexed, not just the descriptor the test file points at. Reason: descriptors with `format: "calldata"` fields embed inner calls into other contracts (kiln-fee-splitter-factory targets any of the sibling Vault descriptors, for instance). The library renders those inner calls by recursively calling `format()` with the same resolver options, so every contract that *could* be embed-called needs to be in the index — otherwise the inner field renders as `NO_DESCRIPTOR`. Empirically, indexing the full upstream registry (~650 descriptors with recursive include merge) takes ~60ms per invocation. Tests/, testsv2/, and dot-directories are skipped during the walk.
 
-The ancestor is computed by `commonAncestorDir`: walks the visited absolute paths, finds the longest shared `/`-separated prefix. ~15 lines, no arbitrary constants. Auto-adjusts per chain.
+**Registry root detection.** Walks up from the descriptor's path looking for a directory named `registry`; the root is its parent (so `<root>/registry/<entity>/**` and `<root>/ercs/**` both sit beneath it). If detection fails (synthetic fixtures outside the registry layout), falls back to single-descriptor mode using `commonAncestorDir` over the include chain — that path stays as-is for tests that don't have a registry around them.
 
-For indexing, we read deployments and `display.formats` off the **merged** descriptor — built by recursively walking the `includes` chain and folding each level via the library's exported `mergeDescriptors(root, included)` (since 0.1.7). Mirrors the library's own `resolveWithIncludes` recursion. Without merging we'd miss deployments declared only in an include (the UniswapX / Permit2 pattern, where the root is just `{ includes, display.formats }` and `context.eip712.deployments` lives in the common).
+**Why `descriptorDirectory` matters.** Through at least 0.1.8 the library's `resolveIncludePath` walks `..` segments against the index value and silently drops `..` once it runs out of segments to pop. If we stored bare basenames, an include like `"../../ercs/foo.json"` from a common file would have its traversal absorbed and resolve to the wrong filesystem location. Anchoring `descriptorDirectory` at the registry root (and storing each descriptor as its full path relative to that root) gives the library's `..` math enough leading segments to land correctly.
 
-Cycle detection uses a `seen` set of absolute paths. A repeated path throws at index-build time (the whole runner invocation fails) — unlike the library's runtime `CYCLIC_INCLUDES` warning, we can't surface it per-case because there's no per-case context yet. Fix the fixture's chain.
+**Per-descriptor indexing** uses the **merged** form: each descriptor is loaded recursively through its `includes` chain, folded via the library's exported `mergeDescriptors` (since 0.1.7). Without merging we'd miss deployments declared only in an include (the UniswapX / Permit2 pattern). Errors during merge (bad JSON, missing include, cycle) are caught per descriptor — one broken file doesn't kill the whole index.
+
+Cycle detection uses a `seen` set of absolute paths. The single-descriptor fallback throws on cycle; the whole-registry path swallows it via the try/catch around each file. Fix the fixture's chain either way.
 
 Pre-0.1.5 the library used `import(path)` without the JSON attribute, so the runner had to wrap each descriptor (and every transitive include) as a `.mjs` module in a temp dir, rewriting `includes` pointers to match. Git history of this file shows that workaround if needed.
 
