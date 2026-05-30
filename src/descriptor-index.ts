@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 
 import { keccak_256 } from "@noble/hashes/sha3.js";
 
@@ -11,27 +11,42 @@ import type {
 } from "@ethereum-sourcify/clear-signing";
 
 interface EmbeddedDescriptorBundle {
-  /** Filesystem directory containing the descriptor and its `includes` siblings. */
+  /** Filesystem directory the library treats as the embedded resolver's root. */
   descriptorDirectory: string;
-  /** Index keying CAIP-10 ids to the descriptor's basename under `descriptorDirectory`. */
+  /** Index keying CAIP-10 ids to the descriptor's path under `descriptorDirectory`. */
   index: RegistryIndex;
 }
 
+interface MergeResult {
+  descriptor: Descriptor;
+  /** Every absolute path the include walk touched, in visit order. */
+  visited: string[];
+}
+
 /**
- * Build a RegistryIndex from a descriptor JSON file on disk, pointing the
- * library straight at the registry directory. No staging — the library
- * loads the descriptor via dynamic `import(path, { with: { type: "json" } })`
- * (since @ethereum-sourcify/clear-signing >= 0.1.5), and resolves any
- * `includes` siblings in the same directory natively.
+ * Build a RegistryIndex from a descriptor JSON file on disk. No staging —
+ * the library loads files via `import(path, { with: { type: "json" } })`
+ * directly from the registry checkout (since
+ * `@ethereum-sourcify/clear-signing >= 0.1.5`).
  *
- * For deployments and formats we merge the root with its include chain via
- * the library's `mergeDescriptors`, walking the chain recursively (matches
- * the library's runtime `resolveWithIncludes` since 0.1.7). That gives us
- * the exact same view the library uses at lookup time, including the
- * array-replace behavior of the merge (root's deployments override
- * include's). Without merging we'd miss deployments declared only in an
- * include (the UniswapX / Permit2 pattern), where the root file is just
- * `{ includes, display.formats }` and the deployments live in the common.
+ * `descriptorDirectory` is set to the **common ancestor directory** of every
+ * file the include chain touches, not just the leaf's parent. Why: the
+ * library's `resolveWithIncludes` (through 0.1.8 at least) joins the index
+ * value's path with the descriptor's `includes` segment by segment, and a
+ * `..` walked off the root of that joined path is silently dropped. If the
+ * index value is a bare basename, an include like `"../../ercs/foo.json"`
+ * loses its traversal entirely and the lookup ends up at the wrong
+ * filesystem location. By rooting `descriptorDirectory` at the common
+ * ancestor of every visited file and storing the leaf as a relative path
+ * beneath it, every chain step has enough path context for the library's
+ * `..` math to land correctly. Sibling-only chains keep working — the
+ * ancestor reduces to the leaf's dirname in that case.
+ *
+ * Deployments and formats are read off the merged descriptor (built via the
+ * library's `mergeDescriptors`, recursively, with cycle detection). The
+ * merge mirrors what the library produces at runtime, so deployments
+ * declared only in an include (e.g. UniswapX / Permit2 / kiln-vault) are
+ * indexed correctly.
  *
  * Mirrors the library's `indexDescriptor` selection:
  *   - if the merged descriptor has `context.contract.deployments`, treat as
@@ -45,10 +60,10 @@ export async function buildIndexFromDescriptorFile(
   descriptorPath: string,
 ): Promise<EmbeddedDescriptorBundle> {
   const absolute = resolve(descriptorPath);
-  const descriptorDirectory = dirname(absolute);
-  const file = basename(absolute);
+  const { descriptor, visited } = await loadMergedDescriptor(absolute);
 
-  const descriptor = await loadMergedDescriptor(absolute);
+  const descriptorDirectory = commonAncestorDir(visited);
+  const file = relative(descriptorDirectory, absolute);
 
   const index: RegistryIndex = { calldataIndex: {}, typedDataIndex: {} };
 
@@ -97,27 +112,67 @@ export async function buildIndexFromDescriptorFile(
 /**
  * Load the descriptor at `rootPath` and recursively follow its `includes`
  * chain, merging each level via the library's `mergeDescriptors`. Mirrors
- * the library's `resolveWithIncludes` (since 0.1.7), including cycle
- * detection — a repeated path throws so we don't loop forever.
+ * the library's `resolveWithIncludes`, including cycle detection. Also
+ * returns every absolute path visited so callers can use them to pick a
+ * `descriptorDirectory` that covers the whole chain.
  */
-async function loadMergedDescriptor(
-  rootPath: string,
-  visited: Set<string> = new Set(),
-): Promise<Descriptor> {
-  const absolute = resolve(rootPath);
-  if (visited.has(absolute)) {
-    throw new Error(
-      `cyclic \`includes\` chain detected at descriptor: ${absolute}`,
-    );
+async function loadMergedDescriptor(rootPath: string): Promise<MergeResult> {
+  const visited: string[] = [];
+  const seen = new Set<string>();
+
+  async function walk(filePath: string): Promise<Descriptor> {
+    const absolute = resolve(filePath);
+    if (seen.has(absolute)) {
+      throw new Error(
+        `cyclic \`includes\` chain detected at descriptor: ${absolute}`,
+      );
+    }
+    seen.add(absolute);
+    visited.push(absolute);
+
+    const descriptor = JSON.parse(
+      await readFile(absolute, "utf8"),
+    ) as Descriptor;
+    if (typeof descriptor.includes !== "string") return descriptor;
+
+    const includePath = resolve(dirname(absolute), descriptor.includes);
+    const included = await walk(includePath);
+    return mergeDescriptors(descriptor, included);
   }
-  visited.add(absolute);
 
-  const descriptor = JSON.parse(await readFile(absolute, "utf8")) as Descriptor;
-  if (typeof descriptor.includes !== "string") return descriptor;
+  const descriptor = await walk(rootPath);
+  return { descriptor, visited };
+}
 
-  const includePath = resolve(dirname(absolute), descriptor.includes);
-  const included = await loadMergedDescriptor(includePath, visited);
-  return mergeDescriptors(descriptor, included);
+/**
+ * Longest directory prefix shared by every absolute file path. For a single
+ * path, returns its dirname. Used as `descriptorDirectory` so the library
+ * has enough path context to resolve `..` traversals correctly when walking
+ * the include chain.
+ */
+function commonAncestorDir(absolutePaths: string[]): string {
+  if (absolutePaths.length === 0) {
+    throw new Error("commonAncestorDir: no paths");
+  }
+  if (absolutePaths.length === 1) {
+    const only = absolutePaths[0];
+    if (only === undefined) throw new Error("commonAncestorDir: empty path");
+    return dirname(only);
+  }
+  const segmentLists = absolutePaths.map((p) => p.split("/"));
+  const first = segmentLists[0];
+  if (!first) throw new Error("commonAncestorDir: empty path list");
+  let prefixLen = first.length;
+  for (let listIdx = 1; listIdx < segmentLists.length; listIdx++) {
+    const other = segmentLists[listIdx];
+    if (!other) continue;
+    const limit = Math.min(prefixLen, other.length);
+    let i = 0;
+    while (i < limit && other[i] === first[i]) i++;
+    prefixLen = i;
+  }
+  const joined = first.slice(0, prefixLen).join("/");
+  return joined === "" ? "/" : joined;
 }
 
 function keccak256Hex(asciiInput: string): string {

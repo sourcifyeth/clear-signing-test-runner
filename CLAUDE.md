@@ -93,11 +93,15 @@ Source of truth: [`specs/erc7730-tests-v2.schema.json`](https://github.com/manue
 
 ## Descriptor loading & `includes`
 
-`descriptor-index.ts` does **no staging** — `descriptorDirectory` is set to the descriptor's own directory in the registry checkout, and the index value is the descriptor's basename (`calldata-foo.json`). The library loads it via `import(path, { with: { type: "json" } })` (introduced in `@ethereum-sourcify/clear-signing@0.1.5`) and resolves any `includes: "common-bar.json"` sibling in the same directory automatically.
+`descriptor-index.ts` does **no staging** — files are read straight from the registry checkout via `import(path, { with: { type: "json" } })` (since `@ethereum-sourcify/clear-signing@0.1.5`).
+
+**`descriptorDirectory` is the common ancestor of every file in the include chain**, not the leaf's parent. Reason: through at least 0.1.8 the library's `resolveIncludePath` walks `..` segments against the index value and silently drops `..` once it runs out of segments to pop. If the index value were a bare basename, an include like `"../../ercs/foo.json"` would have its traversal absorbed and resolve to the wrong filesystem location (the kiln-vault / morpho / UniswapX / Permit2 pattern). By rooting `descriptorDirectory` at the smallest directory that covers the whole chain and storing the leaf as a relative path beneath it, every chain step has enough leading segments for the library's `..` math to land correctly. Sibling-only chains keep working because the common ancestor reduces to the leaf's dirname.
+
+The ancestor is computed by `commonAncestorDir`: walks the visited absolute paths, finds the longest shared `/`-separated prefix. ~15 lines, no arbitrary constants. Auto-adjusts per chain.
 
 For indexing, we read deployments and `display.formats` off the **merged** descriptor — built by recursively walking the `includes` chain and folding each level via the library's exported `mergeDescriptors(root, included)` (since 0.1.7). Mirrors the library's own `resolveWithIncludes` recursion. Without merging we'd miss deployments declared only in an include (the UniswapX / Permit2 pattern, where the root is just `{ includes, display.formats }` and `context.eip712.deployments` lives in the common).
 
-Cycle detection uses a `visited` set of absolute paths. A repeated path throws at index-build time (the whole runner invocation fails) — unlike the library's runtime `CYCLIC_INCLUDES` warning, we can't surface it per-case because there's no per-case context yet. Fix the fixture's chain.
+Cycle detection uses a `seen` set of absolute paths. A repeated path throws at index-build time (the whole runner invocation fails) — unlike the library's runtime `CYCLIC_INCLUDES` warning, we can't surface it per-case because there's no per-case context yet. Fix the fixture's chain.
 
 Pre-0.1.5 the library used `import(path)` without the JSON attribute, so the runner had to wrap each descriptor (and every transitive include) as a `.mjs` module in a temp dir, rewriting `includes` pointers to match. Git history of this file shows that workaround if needed.
 
