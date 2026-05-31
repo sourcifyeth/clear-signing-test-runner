@@ -84,14 +84,18 @@ async function runOneCase(
 
     const rendered = mapDisplayModel(model);
     const cmp = compareRendered(rendered, tc.expected);
-    if (cmp.ok) {
+    const hasTopLevelWarning = (model.warnings?.length ?? 0) > 0;
+
+    if (cmp.ok && !hasTopLevelWarning) {
       return { description: tc.description, status: "pass", rendered };
     }
     return {
       description: tc.description,
       status: "fail",
       rendered,
-      message: appendWarnings(cmp.message, model.warnings),
+      message: cmp.ok
+        ? formatWarningList(model.warnings)
+        : appendWarnings(cmp.message, model.warnings),
     };
   } catch (err) {
     return {
@@ -111,14 +115,22 @@ function isEip712Case(tc: TestCaseInput): tc is Eip712TestCaseInput {
  * (e.g. when no descriptor matched) bottoms out at a generic
  * "intent mismatch: expected 'Borrow', got ''" with no clue as to why
  * everything is empty — the warning is what tells you.
+ *
+ * Top-level warnings always indicate a rendering failure (per-field
+ * fallbacks like UNKNOWN_TOKEN live on DisplayField.warning, not here),
+ * so their presence alone is enough to fail a case.
  */
 function appendWarnings(
   message: string,
   warnings: Warning[] | undefined,
 ): string {
   if (!warnings?.length) return message;
-  const formatted = warnings.map((w) => `${w.code}: ${w.message}`).join("; ");
-  return `${message} (library warnings: ${formatted})`;
+  return `${message} (library warnings: ${formatWarningList(warnings)})`;
+}
+
+function formatWarningList(warnings: Warning[] | undefined): string {
+  if (!warnings?.length) return "";
+  return warnings.map((w) => `${w.code}: ${w.message}`).join("; ");
 }
 
 function resolverOptions(ctx: RunContext) {
