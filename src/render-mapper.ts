@@ -62,7 +62,16 @@ function mapFields(
 
 function mapField(field: DisplayField): RenderedValue {
   if (field.embeddedCalldata?.display) {
-    const inner = mapDisplayModel(field.embeddedCalldata.display);
+    const display = field.embeddedCalldata.display;
+    // When the library couldn't resolve / render the inner call (no
+    // descriptor for the target, decode error, etc.) it returns a model
+    // with only top-level warnings — no intent, no fields, no owner. In
+    // that case emit `field.value` (the raw embedded calldata hex) so the
+    // wallet has something to display, rather than an empty nested object.
+    if (isUnresolvedDisplay(display)) {
+      return field.value;
+    }
+    const inner = mapDisplayModel(display);
     const nested: { [label: string]: RenderedValue } = {
       intent: inner.intent,
       owner: inner.owner,
@@ -75,4 +84,8 @@ function mapField(field: DisplayField): RenderedValue {
   }
 
   return field.value;
+}
+
+function isUnresolvedDisplay(display: DisplayModel): boolean {
+  return Boolean(display.warnings?.length);
 }
