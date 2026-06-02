@@ -5,20 +5,27 @@ import type {
 } from "@ethereum-sourcify/clear-signing";
 import { isFieldGroup } from "@ethereum-sourcify/clear-signing";
 
-import type { RenderedDisplay, RenderedValue } from "./types.js";
+import type {
+  RenderedDisplay,
+  RenderedField,
+  RenderedValue,
+} from "./types.js";
 
 /**
  * Map a clear-signing DisplayModel onto the RenderedDisplay shape the test
  * results contract expects:
- *   { intent: string, owner: string, fields: { label: string | nested } }
+ *   { intent, interpolatedIntent?, owner, fields: Array<{label, value}> }
  *
- * Fields are a flat `{label: value}` map. Groups (`DisplayFieldGroup`) are
- * flattened — their `label` is dropped and their inner fields are merged into
- * the parent map. Test fixtures' `expected` blocks are authored this way too.
+ * `fields` is an ordered array — duplicate labels are preserved (array
+ * iteration paths like `signers.[]` legitimately emit the same label
+ * multiple times). Groups (`DisplayFieldGroup`) are flattened in place:
+ * their `label` is dropped and their inner entries are appended to the
+ * parent array in order. Nested groups recurse and flatten the same way.
+ * Test fixtures' `expected.fields` are authored in the same shape.
  *
- * The only nesting comes from `calldata` embedded calldata fields, which
- * emit a `{intent, owner, fields}` object recursively shaped like a
- * top-level RenderedDisplay.
+ * The only nesting comes from `calldata` embedded calldata fields, where
+ * the entry's `value` is a recursive `{intent, owner, fields: [...]}`
+ * RenderedDisplay.
  */
 export function mapDisplayModel(model: DisplayModel): RenderedDisplay {
   const out: RenderedDisplay = {
@@ -32,9 +39,7 @@ export function mapDisplayModel(model: DisplayModel): RenderedDisplay {
   return out;
 }
 
-function renderIntent(
-  intent: DisplayModel["intent"],
-): string {
+function renderIntent(intent: DisplayModel["intent"]): string {
   if (intent == null) return "";
   if (typeof intent === "string") return intent;
   return Object.entries(intent)
@@ -44,17 +49,14 @@ function renderIntent(
 
 function mapFields(
   fields: ReadonlyArray<DisplayField | DisplayFieldGroup>,
-): { [label: string]: RenderedValue } {
-  const out: { [label: string]: RenderedValue } = {};
+): RenderedField[] {
+  const out: RenderedField[] = [];
   for (const f of fields) {
     if (isFieldGroup(f)) {
-      // Groups are flattened: drop the group label, merge inner entries
-      // into the parent map. Nested groups recurse and collapse as well.
-      for (const [label, value] of Object.entries(mapFields(f.fields))) {
-        out[label] = value;
-      }
+      // Groups are flattened in place — append inner entries in order.
+      out.push(...mapFields(f.fields));
     } else {
-      out[f.label] = mapField(f);
+      out.push({ label: f.label, value: mapField(f) });
     }
   }
   return out;
@@ -71,16 +73,7 @@ function mapField(field: DisplayField): RenderedValue {
     if (isUnresolvedDisplay(display)) {
       return field.value;
     }
-    const inner = mapDisplayModel(display);
-    const nested: { [label: string]: RenderedValue } = {
-      intent: inner.intent,
-      owner: inner.owner,
-      fields: inner.fields,
-    };
-    if (inner.interpolatedIntent !== undefined) {
-      nested.interpolatedIntent = inner.interpolatedIntent;
-    }
-    return nested;
+    return mapDisplayModel(display);
   }
 
   return field.value;

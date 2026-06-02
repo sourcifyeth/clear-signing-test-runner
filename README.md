@@ -79,7 +79,15 @@ The schema is defined at [`specs/erc7730-tests-v2.schema.json`](https://github.c
       "description": "Repay All USDC variable rate",
       "rawTx": "0x02f8ad018189...",
       "txHash": "0xf869d27754...",
-      "expected": { "intent": "Repay loan", "owner": "Aave DAO", "fields": { ... } }
+      "expected": {
+        "intent": "Repay loan",
+        "owner": "Aave DAO",
+        "fields": [
+          { "label": "Amount to repay", "value": "All USDC" },
+          { "label": "Interest rate mode", "value": "variable" },
+          { "label": "For debt holder", "value": "0x2Fec9B58d089447d3E5E50578B9F71321713a470" }
+        ]
+      }
     },
     {
       "description": "Permit 100 USDC",
@@ -89,7 +97,14 @@ The schema is defined at [`specs/erc7730-tests-v2.schema.json`](https://github.c
         "domain": { "chainId": 1, "verifyingContract": "0x..." },
         "message": { "owner": "0x...", "spender": "0x...", "value": "100", "nonce": 0, "deadline": 0 }
       },
-      "expected": { "intent": "Permit", "owner": "...", "fields": { ... } }
+      "expected": {
+        "intent": "Permit",
+        "owner": "...",
+        "fields": [
+          { "label": "Spender", "value": "0x..." },
+          { "label": "Amount", "value": "100 USDC" }
+        ]
+      }
     }
   ]
 }
@@ -123,11 +138,11 @@ The schema is defined at [`specs/erc7730-tests-v2.schema.json`](https://github.c
       "rendered": {
         "intent": "Repay loan",
         "owner": "Aave DAO",
-        "fields": {
-          "Amount to repay": "All USDC",
-          "Interest rate mode": "variable",
-          "For debt holder": "0x2Fec9B58d089447d3E5E50578B9F71321713a470"
-        }
+        "fields": [
+          { "label": "Amount to repay", "value": "All USDC" },
+          { "label": "Interest rate mode", "value": "variable" },
+          { "label": "For debt holder", "value": "0x2Fec9B58d089447d3E5E50578B9F71321713a470" }
+        ]
       }
     }
   ]
@@ -149,11 +164,11 @@ The runner never emits `skipped` on its own — that status exists for future op
 
 `rendered` has the shape `{intent, interpolatedIntent?, owner, fields}`. `interpolatedIntent` is included when the library produces one (the descriptor declared a templated intent that resolved against the transaction data, e.g. `"Swap 100 USDC for DAI"`); it is omitted otherwise. The `intent` field stays the un-interpolated literal form (e.g. `"Swap"`). Both are compared exactly when both sides have them; one-sided presence is treated as a mismatch.
 
-`fields` is a flat `{label: value}` map. Field values are strings, except:
+`fields` is an **ordered array of `{label, value}` entries**. Order matches the descriptor's field declaration order and is significant: comparison is index-based, so a mismatch on either `label` or `value` at the same index is a fail. Duplicate labels are first-class — array-iteration paths like `signers.[]` legitimately produce repeated `"Signer"` entries back to back.
 
-- **`calldata` formatters with `embeddedCalldata.display`** — emitted as `{ intent, interpolatedIntent?, owner, fields }`, recursively shaped like a top-level `rendered`.
+`value` is a string, except for `calldata` formatters with `embeddedCalldata.display` — those emit a recursive `{intent, interpolatedIntent?, owner, fields}` (with the inner `fields` itself an array). Nesting is unbounded.
 
-**Groups are flattened.** When the library returns a `DisplayFieldGroup`, its `label` is dropped and its inner fields are merged directly into the parent `fields` map (nested groups collapse the same way). Author `.tests.json` `expected` blocks the same way — no group wrapper objects.
+**Groups are flattened in place.** When the library returns a `DisplayFieldGroup`, its `label` is dropped and its inner entries are appended to the parent array in order. Nested groups collapse the same way. Author `.tests.json` `expected.fields` the same way — no group wrapper objects.
 
 ## Verification: aave calldata-lpv2
 

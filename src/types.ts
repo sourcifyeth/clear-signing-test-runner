@@ -4,14 +4,29 @@
  *   .github/test-results/README.md of the clear-signing-erc7730-registry.
  */
 
-/** Rendered shape — recursive map of label → string | nested map. */
-export type RenderedValue = string | { [label: string]: RenderedValue };
+/**
+ * A single rendered field — `{label, value}` carried in an ordered array.
+ * `value` is a plain string, or — for `format: "calldata"` fields — a
+ * nested `RenderedDisplay` whose `fields` is itself an array. Nesting is
+ * recursive.
+ */
+export interface RenderedField {
+  label: string;
+  value: RenderedValue;
+}
+
+export type RenderedValue = string | RenderedDisplay;
 
 export interface RenderedDisplay {
   intent: string;
   interpolatedIntent?: string;
   owner: string;
-  fields: { [label: string]: RenderedValue };
+  /**
+   * Ordered list of `{label, value}` entries. Labels are not unique
+   * (array-iteration paths and groups can produce repeated labels). Entry
+   * order matches the descriptor's field declaration order.
+   */
+  fields: RenderedField[];
 }
 
 export interface DataProviderInput {

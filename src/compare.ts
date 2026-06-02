@@ -1,4 +1,8 @@
-import type { RenderedDisplay, RenderedValue } from "./types.js";
+import type {
+  RenderedDisplay,
+  RenderedField,
+  RenderedValue,
+} from "./types.js";
 
 interface CompareResult {
   ok: boolean;
@@ -8,8 +12,11 @@ interface CompareResult {
 
 /**
  * Deep structural equality between two RenderedDisplay objects. Strings are
- * compared exactly (no trim, no case normalization). Field key order is
- * irrelevant. On mismatch, `message` describes the first divergence.
+ * compared exactly (no trim, no case normalization). `fields` is compared
+ * as an ordered array — entries are diffed by index, including labels.
+ * Duplicate labels are first-class. On mismatch, `message` describes the
+ * first divergence using `fields[i]` / `fields[i].label` /
+ * `fields[i].value` paths.
  */
 export function compareRendered(
   actual: RenderedDisplay,
@@ -28,38 +35,27 @@ export function compareRendered(
   if (actual.owner !== expected.owner) {
     return mismatch("owner", expected.owner, actual.owner);
   }
-  return compareFieldMap(actual.fields, expected.fields, "fields");
+  return compareFieldArray(actual.fields, expected.fields, "fields");
 }
 
-function compareFieldMap(
-  actual: { [label: string]: RenderedValue },
-  expected: { [label: string]: RenderedValue },
+function compareFieldArray(
+  actual: RenderedField[],
+  expected: RenderedField[],
   path: string,
 ): CompareResult {
-  const actualKeys = Object.keys(actual);
-  const expectedKeys = Object.keys(expected);
-
-  const expectedSet = new Set(expectedKeys);
-  for (const k of actualKeys) {
-    if (!expectedSet.has(k)) {
-      return {
-        ok: false,
-        message: `${path}: unexpected key '${k}' in actual`,
-      };
-    }
+  if (actual.length !== expected.length) {
+    return {
+      ok: false,
+      message: `${path}: length mismatch — expected ${expected.length} entries, got ${actual.length}`,
+    };
   }
-  const actualSet = new Set(actualKeys);
-  for (const k of expectedKeys) {
-    if (!actualSet.has(k)) {
-      return {
-        ok: false,
-        message: `${path}: missing key '${k}' in actual`,
-      };
+  for (let i = 0; i < expected.length; i++) {
+    const a = actual[i]!;
+    const e = expected[i]!;
+    if (a.label !== e.label) {
+      return mismatch(`${path}[${i}].label`, e.label, a.label);
     }
-  }
-
-  for (const k of expectedKeys) {
-    const r = compareValue(actual[k]!, expected[k]!, `${path}[${JSON.stringify(k)}]`);
+    const r = compareValue(a.value, e.value, `${path}[${i}].value`);
     if (!r.ok) return r;
   }
   return { ok: true, message: "" };
@@ -76,9 +72,9 @@ function compareValue(
     return mismatch(path, expected, actual);
   }
   if (aIsObj && eIsObj) {
-    return compareFieldMap(
-      actual as { [k: string]: RenderedValue },
-      expected as { [k: string]: RenderedValue },
+    return compareNestedDisplay(
+      actual as RenderedDisplay,
+      expected as RenderedDisplay,
       path,
     );
   }
@@ -86,6 +82,27 @@ function compareValue(
     return mismatch(path, expected, actual);
   }
   return { ok: true, message: "" };
+}
+
+function compareNestedDisplay(
+  actual: RenderedDisplay,
+  expected: RenderedDisplay,
+  path: string,
+): CompareResult {
+  if (actual.intent !== expected.intent) {
+    return mismatch(`${path}.intent`, expected.intent, actual.intent);
+  }
+  if (actual.interpolatedIntent !== expected.interpolatedIntent) {
+    return mismatch(
+      `${path}.interpolatedIntent`,
+      expected.interpolatedIntent,
+      actual.interpolatedIntent,
+    );
+  }
+  if (actual.owner !== expected.owner) {
+    return mismatch(`${path}.owner`, expected.owner, actual.owner);
+  }
+  return compareFieldArray(actual.fields, expected.fields, `${path}.fields`);
 }
 
 function mismatch(

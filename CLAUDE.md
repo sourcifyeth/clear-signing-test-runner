@@ -62,15 +62,15 @@ The library returns a `DisplayModel`; we flatten it to `{intent, interpolatedInt
 - **`intent`** is the literal/un-interpolated form (the library's `intent` after string-coercion via `renderIntent` — when intent is a Record we join `key: value` pairs with commas).
 - **`interpolatedIntent`** is copied from `model.interpolatedIntent` when present, omitted otherwise. The registry spec compares this exactly: if `expected.interpolatedIntent` is set, actual must match; if both sides omit it, equal; if one is present and the other isn't, mismatch.
 - **`owner`** comes from `model.metadata?.owner ?? ""`.
-- **`fields`** is the flat `{label: RenderedValue}` map produced by `mapFields`.
+- **`fields`** is an ordered `Array<{label, value}>` (since runner v0.2.0 / registry spec commit `8a4380b`). Order matches the descriptor's field declaration order and is significant. Duplicate labels are preserved (array-iteration paths like `signers.[]` legitimately emit the same label multiple times). `mapFields` walks `model.fields` in order, appends a `{label, value}` for each `DisplayField`, and recurses-and-appends for each `DisplayFieldGroup`.
 
 Field-value rules:
 
 - **String** by default — `field.value` verbatim. This includes `addressName` / `interoperableAddressName` fields: emit the library's resolved string (whether it's a human-readable name or a raw address fallback). **Do not** split into a `{Name, Address}` object — only the `calldata` formatter produces a nested object.
-- **Group (`DisplayFieldGroup`)**: **flatten**. Drop the group `label` and merge inner entries into the parent `fields` map. Nested groups recurse and collapse the same way. Test fixtures author `expected` blocks this way too — no group wrappers. (The registry spec README implies groups should be nested objects, but the project's convention here is flat. Don't reintroduce wrapping without checking with the user.)
-- **`calldata` with `embeddedCalldata.display`**: emit a recursive `{intent, interpolatedIntent?, owner, fields}` object — same shape as top-level rendered. The aave fixture doesn't exercise this path, so the exact shape is a judgment call; revisit when a real fixture appears.
+- **Group (`DisplayFieldGroup`)**: **flatten in place**. Drop the group `label` and append the group's inner entries to the parent array in order. Nested groups recurse and flatten the same way. Test fixtures author `expected.fields` this way too — no group wrappers.
+- **`calldata` with `embeddedCalldata.display`**: emit a recursive `{intent, interpolatedIntent?, owner, fields: [...]}` object — same shape as top-level rendered, with `fields` itself an array. The aave fixture doesn't exercise this path, but the kiln-fee-splitter-factory does.
 
-`compareRendered` is order-independent on object keys, exact-match on strings (no trim, no case normalization).
+`compareRendered` is **index-based** on `fields`: same length, same label and value at each index, recursive on nested displays. Mismatch messages use `fields[i].label` / `fields[i].value` paths.
 
 ## Verified outcome on aave
 
