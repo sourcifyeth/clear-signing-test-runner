@@ -14,7 +14,7 @@ npm run build        # tsc + chmod +x dist/cli.js
 node dist/cli.js <tests-file> -o <results-file> [--verbose]
 ```
 
-Node >= 22. ESM only. TypeScript with `moduleResolution: "NodeNext"`. Requires `@ethereum-sourcify/clear-signing >= 0.1.5` — earlier versions either ship extensionless relative imports (broken in Node ESM) or load embedded descriptors via dynamic JSON `import()` without the `with { type: "json" }` attribute (which forces the runner to wrap every descriptor as a `.mjs` module). The git history of `descriptor-index.ts` shows the `.mjs` staging workaround if you ever need to pin to an older library.
+Node >= 22. ESM only. TypeScript with `moduleResolution: "NodeNext"`. Requires `@ethereum-sourcify/clear-signing >= 0.2.0` — the runner uses `createFilesystemResolver` from the `@ethereum-sourcify/clear-signing/filesystem` subpath, wired into `format()` as `{ type: "custom", resolver }`. The pre-0.2.0 `{ type: "embedded" }` resolver was removed; pre-0.1.5 wrapped descriptors as `.mjs` modules. The git history of `runner.ts` / `descriptor-index.ts` shows both older patterns if you ever need to pin to an older library.
 
 ## Module layout
 

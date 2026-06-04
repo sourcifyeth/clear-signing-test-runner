@@ -2,7 +2,12 @@ import { readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 import { format, formatTypedData } from "@ethereum-sourcify/clear-signing";
-import type { Warning } from "@ethereum-sourcify/clear-signing";
+import type {
+  DescriptorResolver,
+  ExternalDataProvider,
+  Warning,
+} from "@ethereum-sourcify/clear-signing";
+import { createFilesystemResolver } from "@ethereum-sourcify/clear-signing/filesystem";
 import implementationPkg from "@ethereum-sourcify/clear-signing/package.json" with { type: "json" };
 
 import { compareRendered } from "./compare.js";
@@ -42,15 +47,12 @@ export async function runTests(opts: RunOptions): Promise<ResultsFile> {
     descriptorPath,
   );
 
+  const resolver = createFilesystemResolver({ index, descriptorDirectory });
   const externalDataProvider = buildExternalDataProvider(input.dataProvider);
 
   const cases: CaseResult[] = [];
   for (const tc of input.tests) {
-    const result = await runOneCase(tc, {
-      descriptorDirectory,
-      index,
-      externalDataProvider,
-    });
+    const result = await runOneCase(tc, { resolver, externalDataProvider });
     cases.push(result);
     if (opts.verbose) {
       opts.log?.(`[${result.status}] ${result.description}${result.message ? ` — ${result.message}` : ""}`);
@@ -68,9 +70,8 @@ export async function runTests(opts: RunOptions): Promise<ResultsFile> {
 }
 
 type RunContext = {
-  descriptorDirectory: string;
-  index: import("@ethereum-sourcify/clear-signing").RegistryIndex;
-  externalDataProvider: import("@ethereum-sourcify/clear-signing").ExternalDataProvider;
+  resolver: DescriptorResolver;
+  externalDataProvider: ExternalDataProvider;
 };
 
 async function runOneCase(
@@ -136,9 +137,8 @@ function formatWarningList(warnings: Warning[] | undefined): string {
 function resolverOptions(ctx: RunContext) {
   return {
     descriptorResolverOptions: {
-      type: "embedded" as const,
-      index: ctx.index,
-      descriptorDirectory: ctx.descriptorDirectory,
+      type: "custom" as const,
+      resolver: ctx.resolver,
     },
     externalDataProvider: ctx.externalDataProvider,
   };
