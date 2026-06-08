@@ -50,7 +50,14 @@ export interface Eip712TypedDataInput {
 
 export interface CalldataTestCaseInput {
   description: string;
+  /** Raw unsigned transaction hex (0x-prefixed). */
   rawTx: string;
+  /**
+   * Checksummed signer address. Optional — only set when the descriptor
+   * references the signer via `@.from`. Passed through to the library's
+   * `Transaction.from`.
+   */
+  from?: string;
   txHash?: string;
   expected: RenderedDisplay;
 }

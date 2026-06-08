@@ -145,14 +145,14 @@ function resolverOptions(ctx: RunContext) {
 }
 
 async function formatCalldataCase(tc: CalldataTestCaseInput, ctx: RunContext) {
-  const decoded = await decodeRawTx(tc.rawTx);
+  const decoded = decodeRawTx(tc.rawTx);
   return format(
     {
       chainId: decoded.chainId,
       to: decoded.to,
       data: decoded.data,
       value: decoded.value,
-      ...(decoded.from ? { from: decoded.from } : {}),
+      ...(tc.from ? { from: tc.from } : {}),
     },
     resolverOptions(ctx),
   );

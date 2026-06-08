@@ -86,7 +86,7 @@ The earlier `threshold`/`message` constant-substitution and addressName renderin
 
 Source of truth: [`specs/erc7730-tests-v2.schema.json`](https://github.com/manuelwedler/clear-signing-erc7730-registry/blob/common-test-strategy/specs/erc7730-tests-v2.schema.json). Tests live at `registry/<entity>/testsv2/<descriptor>.tests.json` (not the legacy `shared-tests/`). A case is either:
 
-- **Calldata** — has `rawTx` (and optional `txHash`). Decoded via viem, routed through `format()`.
+- **Calldata** — has `rawTx` (unsigned hex), optional `from` (checksummed signer address, only set when the descriptor references `@.from`), optional `txHash` (reference only). Decoded via viem, routed through `format()` with `Transaction.from` set from `tc.from` when present. Pre-schema-change fixtures used signed `rawTx` and the runner ecrecovered the signer — that path is gone now.
 - **EIP-712** — has `data: {types, primaryType, domain, message}` (no `rawTx`). Routed through `formatTypedData()`. We inject `account: "0x0…0"` because the schema doesn't carry one; the library uses it only for `@.from` references.
 
 `dataProvider` supports four static blocks (`tokens`, `addressNames`, `nftCollectionNames`, `blockTimestamps`) plus the dynamically-fetched chain info — see the data-provider table in the README.

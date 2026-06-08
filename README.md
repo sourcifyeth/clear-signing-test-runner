@@ -8,7 +8,7 @@ For each test case in a `.tests.json` file (v2 schema), the runner:
 
 1. Loads the referenced ERC-7730 descriptor JSON.
 2. Builds an in-memory registry index from the descriptor (calldata via `context.contract.deployments`; EIP-712 via `context.eip712.deployments` + `display.formats`, hashing each format key with keccak256 and grouping by primary type), so the library never hits the network.
-3. For calldata cases, decodes the raw signed transaction (viem) and calls `format()`. For EIP-712 cases, passes the fixture's `data` block to `formatTypedData()`.
+3. For calldata cases, decodes the raw unsigned transaction (viem), optionally attaches the fixture's `from` (signer address) when present, and calls `format()`. For EIP-712 cases, passes the fixture's `data` block to `formatTypedData()`.
 4. Provides an `externalDataProvider` shimmed from the fixture's static `dataProvider` block, plus a `resolveChainInfo` that fetches `chainid.network/chains_mini.json` on first use (with retry/backoff) and serves later lookups from an in-memory cache.
 5. Maps the library's `DisplayModel` onto the spec's `{ intent, owner, fields }` shape and deep-compares it against `expected`.
 6. Writes one entry per case to `results.json` (atomically — written to a temp file and renamed).
