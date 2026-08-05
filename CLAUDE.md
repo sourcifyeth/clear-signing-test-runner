@@ -33,7 +33,7 @@ src/
                       (tokens/addressNames/nftCollectionNames/blockTimestamps)
   chain-info.ts       lazy fetch + cache of chainid.network/chains_mini.json
                       with retry/backoff; powers resolveChainInfo
-  render-mapper.ts    DisplayModel → {intent, owner, fields} (the spec shape)
+  render-mapper.ts    DisplayModel → {intent, owner?, fields} (the spec shape)
   compare.ts          deep-equal + first-divergence message for fail status
   types.ts            input/output shapes (RenderedDisplay, ResultsFile,
                       v2 calldata + eip712 test case unions, etc.)
@@ -57,18 +57,18 @@ Exit code is `0` iff the runner ran to completion. A failing case does **not** c
 
 ## Field-value mapping rules
 
-The library returns a `DisplayModel`; we flatten it to `{intent, interpolatedIntent?, owner, fields}`:
+The library returns a `DisplayModel`; we flatten it to `{intent, interpolatedIntent?, owner?, fields}`:
 
 - **`intent`** is the literal/un-interpolated form (the library's `intent` after string-coercion via `renderIntent` — when intent is a Record we join `key: value` pairs with commas).
 - **`interpolatedIntent`** is copied from `model.interpolatedIntent` when present, omitted otherwise. The registry spec compares this exactly: if `expected.interpolatedIntent` is set, actual must match; if both sides omit it, equal; if one is present and the other isn't, mismatch.
-- **`owner`** comes from `model.metadata?.owner ?? ""`.
+- **`owner`** is copied from `model.metadata?.owner` when defined, omitted otherwise — same treatment as `interpolatedIntent`. It must not be coerced to `""`: the v2 test schema requires only `intent` and `fields` (registry commit `03a0ba7`), so descriptors with no `metadata.owner` have fixtures that omit `owner`, and an invented `""` would never equal the fixture's `undefined`.
 - **`fields`** is an ordered `Array<{label, value}>` (since runner v0.2.0 / registry spec commit `8a4380b`). Order matches the descriptor's field declaration order and is significant. Duplicate labels are preserved (array-iteration paths like `signers.[]` legitimately emit the same label multiple times). `mapFields` walks `model.fields` in order, appends a `{label, value}` for each `DisplayField`, and recurses-and-appends for each `DisplayFieldGroup`.
 
 Field-value rules:
 
 - **String** by default — `field.value` verbatim. This includes `addressName` / `interoperableAddressName` fields: emit the library's resolved string (whether it's a human-readable name or a raw address fallback). **Do not** split into a `{Name, Address}` object — only the `calldata` formatter produces a nested object.
 - **Group (`DisplayFieldGroup`)**: **flatten in place**. Drop the group `label` and append the group's inner entries to the parent array in order. Nested groups recurse and flatten the same way. Test fixtures author `expected.fields` this way too — no group wrappers.
-- **`calldata` with `embeddedCalldata.display`**: emit a recursive `{intent, interpolatedIntent?, owner, fields: [...]}` object — same shape as top-level rendered, with `fields` itself an array. The aave fixture doesn't exercise this path, but the kiln-fee-splitter-factory does.
+- **`calldata` with `embeddedCalldata.display`**: emit a recursive `{intent, interpolatedIntent?, owner?, fields: [...]}` object — same shape as top-level rendered, with `fields` itself an array. The aave fixture doesn't exercise this path, but the kiln-fee-splitter-factory does.
 
 `compareRendered` is **index-based** on `fields`: same length, same label and value at each index, recursive on nested displays. Mismatch messages use `fields[i].label` / `fields[i].value` paths.
 

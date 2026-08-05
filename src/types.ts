@@ -20,7 +20,12 @@ export type RenderedValue = string | RenderedDisplay;
 export interface RenderedDisplay {
   intent: string;
   interpolatedIntent?: string;
-  owner: string;
+  /**
+   * Optional per the v2 test schema — a descriptor may legitimately declare
+   * no `metadata.owner`. Omitted (not coerced to "") when the library
+   * reports none, so a fixture that omits it compares equal.
+   */
+  owner?: string;
   /**
    * Ordered list of `{label, value}` entries. Labels are not unique
    * (array-iteration paths and groups can produce repeated labels). Entry
