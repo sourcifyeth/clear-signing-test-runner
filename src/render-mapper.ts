@@ -14,7 +14,7 @@ import type {
 /**
  * Map a clear-signing DisplayModel onto the RenderedDisplay shape the test
  * results contract expects:
- *   { intent, interpolatedIntent?, owner, fields: Array<{label, value}> }
+ *   { intent, interpolatedIntent?, owner?, fields: Array<{label, value}> }
  *
  * `fields` is an ordered array — duplicate labels are preserved (array
  * iteration paths like `signers.[]` legitimately emit the same label
@@ -30,11 +30,13 @@ import type {
 export function mapDisplayModel(model: DisplayModel): RenderedDisplay {
   const out: RenderedDisplay = {
     intent: renderIntent(model.intent),
-    owner: model.metadata?.owner ?? "",
     fields: mapFields(model.fields ?? []),
   };
   if (model.interpolatedIntent !== undefined) {
     out.interpolatedIntent = model.interpolatedIntent;
+  }
+  if (model.metadata?.owner !== undefined) {
+    out.owner = model.metadata.owner;
   }
   return out;
 }
