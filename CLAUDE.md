@@ -74,7 +74,7 @@ Field-value rules:
 
 ## Verified outcome on aave
 
-Against `registry/aave/testsv2/calldata-lpv2.tests.json` on the `common-test-strategy` branch (use [`manuelwedler/clear-signing-erc7730-registry`](https://github.com/manuelwedler/clear-signing-erc7730-registry/tree/common-test-strategy), not upstream) with library `>= 0.1.4`, all three cases pass:
+Against `registry/aave/testsv2/calldata-lpv2.tests.json` in [`ethereum/clear-signing-erc7730-registry`](https://github.com/ethereum/clear-signing-erc7730-registry) (`master`) with library `>= 0.1.4`, all three cases pass:
 
 - Repay All USDC variable rate — pass
 - Manage collateral — disable WETH — pass
@@ -84,7 +84,7 @@ The earlier `threshold`/`message` constant-substitution and addressName renderin
 
 ## v2 test schema
 
-Source of truth: [`specs/erc7730-tests-v2.schema.json`](https://github.com/manuelwedler/clear-signing-erc7730-registry/blob/common-test-strategy/specs/erc7730-tests-v2.schema.json). Tests live at `registry/<entity>/testsv2/<descriptor>.tests.json` (not the legacy `shared-tests/`). A case is either:
+Source of truth: [`specs/erc7730-tests-v2.schema.json`](https://github.com/ethereum/clear-signing-erc7730-registry/blob/master/specs/erc7730-tests-v2.schema.json). Tests live at `registry/<entity>/testsv2/<descriptor>.tests.json` (not the legacy `shared-tests/`). A case is either:
 
 - **Calldata** — has `rawTx` (unsigned hex), optional `from` (checksummed signer address, only set when the descriptor references `@.from`), optional `txHash` (reference only). Decoded via viem, routed through `format()` with `Transaction.from` set from `tc.from` when present. Pre-schema-change fixtures used signed `rawTx` and the runner ecrecovered the signer — that path is gone now.
 - **EIP-712** — has `data: {types, primaryType, domain, message}` (no `rawTx`). Routed through `formatTypedData()`. We inject `account: "0x0…0"` because the schema doesn't carry one; the library uses it only for `@.from` references.
@@ -127,4 +127,4 @@ If a chain isn't in the list, the resolver returns `null` and the library falls 
 
 - Don't read sibling local projects under `/home/manuel/Projects/sourcify/*` (e.g., the local clear-signing checkout). Fetch from GitHub if needed — the user wants this CLI built against the published library.
 - Don't re-fetch the library's source files from GitHub one by one. The README is the source of truth; `node_modules/@ethereum-sourcify/clear-signing/dist/*.d.ts` covers anything the README doesn't.
-- The test registry fork to consult: `manuelwedler/clear-signing-erc7730-registry`, branch `common-test-strategy`. The upstream `ethereum/clear-signing-erc7730-registry` does **not** yet have the newest test strategy.
+- The test registry to consult is upstream `ethereum/clear-signing-erc7730-registry` on `master` — it carries the v2 test schema and the `testsv2/` fixtures. The old `manuelwedler` fork / `common-test-strategy` branch is obsolete; don't use it.

@@ -49,7 +49,7 @@ The runner reaches `chainid.network` once per invocation to populate the chain r
 
 ## Input format (`.tests.json`, v2 schema)
 
-The schema is defined at [`specs/erc7730-tests-v2.schema.json`](https://github.com/manuelwedler/clear-signing-erc7730-registry/blob/common-test-strategy/specs/erc7730-tests-v2.schema.json) in the registry. A test file declares one descriptor under test, an optional `dataProvider` block of mock external data, and an array of test cases (either calldata or EIP-712).
+The schema is defined at [`specs/erc7730-tests-v2.schema.json`](https://github.com/ethereum/clear-signing-erc7730-registry/blob/master/specs/erc7730-tests-v2.schema.json) in the registry. A test file declares one descriptor under test, an optional `dataProvider` block of mock external data, and an array of test cases (either calldata or EIP-712).
 
 ```json
 {
@@ -172,7 +172,7 @@ The runner never emits `skipped` on its own — that status exists for future op
 
 ## Verification: aave calldata-lpv2
 
-Tested against the canonical fixture from the registry's `common-test-strategy` branch:
+Tested against the canonical fixture from [`ethereum/clear-signing-erc7730-registry`](https://github.com/ethereum/clear-signing-erc7730-registry) (`master`):
 
 ```
 registry/aave/testsv2/calldata-lpv2.tests.json
